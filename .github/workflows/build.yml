@@ -20,12 +20,6 @@ jobs:
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev libappindicator3-dev librsvg2-dev patchelf
-          
       - name: install frontend dependencies
         run: npm install
 
@@ -73,3 +67,35 @@ jobs:
         with:
           name: Lector-TBO-Android
           path: src-tauri/gen/android/app/build/outputs/apk/debug/*.apk
+
+  create-release:
+    needs: [build-macos, build-android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: download macos dmg
+        uses: actions/download-artifact@v4
+        with:
+          name: Lector-TBO-macOS
+          path: release-artifacts
+
+      - name: download android apk
+        uses: actions/download-artifact@v4
+        with:
+          name: Lector-TBO-Android
+          path: release-artifacts
+
+      - name: create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "Lector TBO - Latest Build"
+          body: "Automated build of Lector TBO for macOS and Android."
+          draft: false
+          prerelease: false
+          files: |
+            release-artifacts/**/*.dmg
+            release-artifacts/**/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
