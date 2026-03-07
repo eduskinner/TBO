@@ -9,6 +9,9 @@ on:
 jobs:
   build-macos:
     runs-on: macos-latest
+    strategy:
+      matrix:
+        architecture: [x86_64, aarch64]
     steps:
       - uses: actions/checkout@v4
 
@@ -19,18 +22,20 @@ jobs:
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.architecture == 'x86_64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}
 
       - name: install frontend dependencies
         run: npm install
 
       - name: build tauri desktop
-        run: npm run tauri build
+        run: npm run tauri build -- --target ${{ matrix.architecture == 'x86_64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}
 
       - name: upload macos dmg
         uses: actions/upload-artifact@v4
         with:
-          name: Lector-TBO-macOS
-          path: src-tauri/target/release/bundle/dmg/*.dmg
+          name: Lector-TBO-macOS-${{ matrix.architecture }}
+          path: src-tauri/target/${{ matrix.architecture == 'x86_64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}/release/bundle/dmg/*.dmg
 
   build-android:
     runs-on: ubuntu-latest
@@ -59,7 +64,15 @@ jobs:
       - name: install frontend dependencies
         run: npm install
 
+      - name: initialize android (if missing)
+        # We need the android metadata in the repo, but since we can't run it locally,
+        # we try to run it here. However, 'init' usually needs manual input for name/id.
+        # We'll use the --yes or equivalent if I can find it, or just hope 'build' handles it.
+        # Actually, let's try to run init with the -y flag if available.
+        run: npx tauri android init --yes || true
+
       - name: build tauri android
+        # We use --debug for now to avoid signing issues.
         run: npm run tauri android build -- --debug
 
       - name: upload android apk
@@ -74,10 +87,16 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: download macos dmg
+      - name: download macos aarch64
         uses: actions/download-artifact@v4
         with:
-          name: Lector-TBO-macOS
+          name: Lector-TBO-macOS-aarch64
+          path: release-artifacts
+
+      - name: download macos x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: Lector-TBO-macOS-x86_64
           path: release-artifacts
 
       - name: download android apk
@@ -91,7 +110,11 @@ jobs:
         with:
           tag_name: latest
           name: "Lector TBO - Latest Build"
-          body: "Automated build of Lector TBO for macOS and Android."
+          body: |
+            Automated build of Lector TBO.
+            - **macOS (Apple Silicon)**: aarch64.dmg
+            - **macOS (Intel)**: x86_64.dmg
+            - **Android**: debug.apk
           draft: false
           prerelease: false
           files: |
