@@ -569,10 +569,11 @@ fn clear_library(state: State<AppState>) -> Result<(), String> {
 #[tauri::command]
 fn open_reader_window(app: AppHandle, state: State<AppState>, comic_id: String) -> Result<(), String> {
     { let mut id = state.reader_comic_id.lock().map_err(|e| e.to_string())?; *id = comic_id; }
-    tauri::webview::WebviewWindowBuilder::new(&app, "reader", tauri::WebviewUrl::App("index.html".into()))
-        .title("Lector TBO - Reader")
-        .inner_size(1200.0, 800.0)
-        .build()
+    let builder = tauri::webview::WebviewWindowBuilder::new(&app, "reader", tauri::WebviewUrl::App("index.html".into()));
+    #[cfg(desktop)]
+    let builder = builder.title("Lector TBO - Reader").inner_size(1200.0, 800.0);
+
+    builder.build()
         .map_err(|e: tauri::Error| e.to_string())?;
     Ok(())
 }
