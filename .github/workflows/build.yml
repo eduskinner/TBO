@@ -65,11 +65,7 @@ jobs:
         run: npm install
 
       - name: initialize android (if missing)
-        # We need the android metadata in the repo, but since we can't run it locally,
-        # we try to run it here. However, 'init' usually needs manual input for name/id.
-        # We'll use the --yes or equivalent if I can find it, or just hope 'build' handles it.
-        # Actually, let's try to run init with the -y flag if available.
-        run: npx tauri android init --yes || true
+        run: npx tauri android init --ci
 
       - name: build tauri android
         # We use --debug for now to avoid signing issues.
