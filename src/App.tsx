@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api";
+import { invoke } from "@tauri-apps/api/tauri";
 import { useStore } from "./store";
 import Sidebar from "./components/Sidebar";
 import Library from "./components/Library";
