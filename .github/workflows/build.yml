@@ -1,4 +1,4 @@
-.name: "Build and Release"
+name: Build and Release
 
 on:
   push:
@@ -50,27 +50,24 @@ jobs:
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          # aarch64 only — covers 95%+ of modern Android phones
-          # eliminates 3 of the 4 architectures that made the APK 700MB
           targets: aarch64-linux-android
 
       - name: setup java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: zulu
           java-version: '17'
 
       - name: setup android sdk
         uses: android-actions/setup-android@v3
 
       - name: install android ndk
-        run: |
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;27.2.12479018"
+        run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;27.2.12479018"
 
       - name: set ndk environment
         run: |
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> $GITHUB_ENV
-          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018"         >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> $GITHUB_ENV
 
       - name: install frontend dependencies
         run: npm install
@@ -78,19 +75,11 @@ jobs:
       - name: initialize android project
         run: |
           if [ ! -d "src-tauri/gen/android" ]; then
-            echo "Android project not found — running tauri android init"
             npx tauri android init --ci
-          else
-            echo "Android project already initialised — skipping init"
           fi
 
       - name: build android apk
         run: npm run tauri android build -- --apk --target aarch64
-
-      - name: find and upload apk
-        run: |
-          echo "=== APK files found ==="
-          find src-tauri/gen/android -name "*.apk" 2>/dev/null || echo "No APKs found"
 
       - name: upload android apk
         uses: actions/upload-artifact@v4
@@ -126,12 +115,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: "Lector TBO - Latest Build"
+          name: Lector TBO - Latest Build
           body: |
             Automated build of Lector TBO.
-            - **macOS (Apple Silicon)**: aarch64.dmg
-            - **macOS (Intel)**: x86_64.dmg
-            - **Android (arm64)**: release APK
+            - macOS Apple Silicon: aarch64.dmg
+            - macOS Intel: x86_64.dmg
+            - Android arm64: debug.apk
           draft: false
           prerelease: false
           files: |
