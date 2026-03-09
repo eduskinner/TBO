@@ -19,20 +19,41 @@
 
 html, body, #root {
   height: 100%;
-  overflow: hidden;
   background: var(--bg);
   color: var(--text);
   font-family: 'Outfit', sans-serif;
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
+  /* Mobile: allow scroll in containers, not the root */
+  overflow: hidden;
 }
 
-::-webkit-scrollbar { width: 5px; height: 5px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+/* Touch devices: smooth momentum scrolling */
+@media (pointer: coarse) {
+  * {
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Larger tap targets */
+  button {
+    min-height: 44px;
+    cursor: default;
+  }
+  /* Remove tap highlight flash */
+  * {
+    -webkit-tap-highlight-color: transparent;
+    tap-highlight-color: transparent;
+  }
+}
 
-/* Drag region for Tauri titlebar */
+/* Desktop scrollbars */
+@media (pointer: fine) {
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text3); }
+}
+
+/* Drag region for Tauri desktop titlebar */
 [data-tauri-drag-region] {
   -webkit-app-region: drag;
   app-region: drag;
@@ -42,10 +63,10 @@ html, body, #root {
   app-region: no-drag;
 }
 
-/* Smooth fade-in for covers */
+/* Cover fade-in */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .fade-in { animation: fadeIn 0.25s ease forwards; }
 
@@ -59,3 +80,7 @@ html, body, #root {
   background-size: 800px 100%;
   animation: shimmer 1.4s infinite;
 }
+
+/* Spin utility (used by Loader2 animate-spin) */
+@keyframes spin { to { transform: rotate(360deg); } }
+.animate-spin { animation: spin 1s linear infinite; }
