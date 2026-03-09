@@ -1,4 +1,4 @@
-name: "Build and Release"
+.name: "Build and Release"
 
 on:
   push:
@@ -85,11 +85,7 @@ jobs:
           fi
 
       - name: build android apk
-        run: |
-          npm run tauri android build -- \
-            --apk \
-            --target aarch64 \
-            -- --profile release-android
+        run: npm run tauri android build -- --apk --target aarch64
 
       - name: find and upload apk
         run: |
