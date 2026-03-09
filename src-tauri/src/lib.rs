@@ -568,13 +568,22 @@ fn clear_library(state: State<AppState>) -> Result<(), String> {
 
 #[tauri::command]
 fn open_reader_window(app: AppHandle, state: State<AppState>, comic_id: String) -> Result<(), String> {
+    // Store the comic ID so the reader window can retrieve it.
     { let mut id = state.reader_comic_id.lock().map_err(|e| e.to_string())?; *id = comic_id; }
-    let builder = tauri::webview::WebviewWindowBuilder::new(&app, "reader", tauri::WebviewUrl::App("index.html".into()));
-    #[cfg(desktop)]
-    let builder = builder.title("Lector TBO - Reader").inner_size(1200.0, 800.0);
 
-    builder.build()
-        .map_err(|e: tauri::Error| e.to_string())?;
+    // On desktop: open a dedicated reader window.
+    // On Android: the frontend navigates within the single existing window,
+    //             so we only need to set the comic ID above — no new window needed.
+    #[cfg(desktop)]
+    {
+        let builder = tauri::webview::WebviewWindowBuilder::new(
+            &app, "reader", tauri::WebviewUrl::App("index.html".into())
+        )
+        .title("Lector TBO - Reader")
+        .inner_size(1200.0, 800.0);
+        builder.build().map_err(|e: tauri::Error| e.to_string())?;
+    }
+
     Ok(())
 }
 
@@ -682,23 +691,41 @@ fn clear_missing_comics(state: State<AppState>) -> Result<(), String> {
     Ok(())
 }
 
+/// Fallback data dir used only if Tauri's path resolver fails (desktop edge case).
+/// On Android, app.path().app_data_dir() always succeeds, so this is never called there.
 fn dirs_data() -> PathBuf {
-    std::env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from(".")).join(".local").join("share").join("lector-tbo")
+    std::env::var("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("."))
+        .join(".local").join("share").join("lector-tbo")
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let data_dir = dirs_data();
-    let _ = fs::create_dir_all(&data_dir);
-    let db_path = data_dir.join("panels.db");
-    let conn = Connection::open(&db_path).expect("Failed to open database");
-    init_db(&conn).expect("Failed to initialize database");
-
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .manage(AppState { db: Mutex::new(conn), reader_comic_id: Mutex::new(String::new()) })
+        .setup(|app| {
+            // Use Tauri's cross-platform data directory.
+            // On macOS: ~/Library/Application Support/com.lectortbo.app
+            // On Android: /data/data/com.lectortbo.app/files
+            // This is the ONLY place that differs per platform — everything else works as-is.
+            let data_dir = app.path().app_data_dir()
+                .unwrap_or_else(|_| dirs_data());
+            fs::create_dir_all(&data_dir)
+                .map_err(|e| format!("Failed to create data dir: {}", e))?;
+            let db_path = data_dir.join("panels.db");
+            let conn = Connection::open(&db_path)
+                .map_err(|e| format!("Failed to open database: {}", e))?;
+            init_db(&conn)
+                .map_err(|e| format!("Failed to init database: {}", e))?;
+            app.manage(AppState {
+                db: Mutex::new(conn),
+                reader_comic_id: Mutex::new(String::new()),
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_library, scan_folder, rescan_sources, update_page_count, get_cover, get_covers_batch,
             precache_all_covers, get_page, get_page_count, update_comic, toggle_read_status,
