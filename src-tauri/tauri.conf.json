@@ -17,7 +17,7 @@
     ]
   },
   "productName": "Lector TBO",
-  "mainBinaryName": "Lector TBO",
+  "mainBinaryName": "lector-tbo",
   "version": "0.1.0",
   "identifier": "com.lectortbo.app",
   "plugins": {},
@@ -31,8 +31,7 @@
         "width": 1400,
         "height": 900,
         "minWidth": 900,
-        "minHeight": 600,
-        "useHttpsScheme": true
+        "minHeight": 600
       }
     ],
     "security": {
