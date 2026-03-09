@@ -31,18 +31,16 @@ rayon = "1"
 # jpeg only — no PNG/WebP/GIF/TIFF decoders compiled in (saves ~10MB)
 image = { version = "0.24", default-features = false, features = ["jpeg"] }
 
-# ── Desktop release (macOS/Windows/Linux) ────────────────────────────────────
-[profile.release]
-opt-level = 2          # balanced speed/size for desktop
-lto = "thin"           # link-time optimisation
-codegen-units = 4      # faster compile, still good output
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+default = ["custom-protocol"]
 
-# ── Android release — optimise hard for binary size ──────────────────────────
-# Used by the CI with: cargo build --profile release-android
-[profile.release-android]
-inherits = "release"
-opt-level = "z"        # optimise for size (not speed)
-lto = "fat"            # full LTO — biggest size reduction
-codegen-units = 1      # single codegen unit for best LTO
-strip = true           # strip ALL debug symbols
-panic = "abort"        # no unwinding machinery (~500KB saved)
+# ── Release profile (macOS + Android) ────────────────────────────────────────
+# opt-level=z + fat LTO + strip cuts the Android APK from ~700MB to ~20-30MB.
+# macOS binaries also benefit — slightly slower compile, noticeably smaller app.
+[profile.release]
+opt-level = "z"       # optimise for size
+lto = "fat"           # full link-time optimisation (biggest size reduction)
+codegen-units = 1     # required for fat LTO
+strip = true          # strip all debug symbols
+panic = "abort"       # no unwinding machinery (~500KB saved)
