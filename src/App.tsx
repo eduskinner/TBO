@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/tauri";
 import { useStore } from "./store";
 import Sidebar from "./components/Sidebar";
 import Library from "./components/Library";
@@ -87,7 +86,6 @@ function DesktopApp() {
         await loadLibrary();
         await loadSources();
         setReady(true);
-        invoke("precache_all_covers").catch(() => {});
       } catch (e: any) {
         if (attempts < 20) setTimeout(tryInit, 300);
         else {
@@ -131,7 +129,6 @@ function MobileMain() {
         await loadLibrary();
         await loadSources();
         setReady(true);
-        invoke("precache_all_covers").catch(() => {});
       } catch (e: any) {
         if (attempts < 20) setTimeout(tryInit, 300);
         else {

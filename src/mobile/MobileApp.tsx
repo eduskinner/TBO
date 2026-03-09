@@ -60,7 +60,7 @@ function groupByFolder(comics: Comic[]): FolderGroup[] {
 
 async function scanPath(path: string) {
   useStore.setState({ scanning: true, scanResult: null, scanProgress: null });
-  const unlisten = await listen<ScanProgress>("scan_progress", (ev) => {
+  const unlisten = await listen<ScanProgress>("scan_progress", (ev: { payload: ScanProgress }) => {
     useStore.setState({ scanProgress: ev.payload });
   });
   try {
