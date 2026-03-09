@@ -1,6 +1,6 @@
 # Panels
 
-A comic reader and library manager for macOS, built with Tauri + React.  
+A comic reader and library manager for macOS, built with Tauri + React.   
 Supports CBZ and CBR files. Designed for Android migration in a future iteration.
 
 ---
