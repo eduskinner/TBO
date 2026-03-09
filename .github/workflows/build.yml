@@ -50,7 +50,9 @@ jobs:
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          # aarch64 only — covers 95%+ of modern Android phones
+          # eliminates 3 of the 4 architectures that made the APK 700MB
+          targets: aarch64-linux-android
 
       - name: setup java
         uses: actions/setup-java@v4
@@ -61,21 +63,18 @@ jobs:
       - name: setup android sdk
         uses: android-actions/setup-android@v3
 
-      # ── FIX 1: Install the NDK (required for Rust cross-compilation) ──────
       - name: install android ndk
         run: |
           echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;27.2.12479018"
 
-      # ── FIX 2: Set NDK environment variables so Tauri + Cargo can find it ─
       - name: set ndk environment
         run: |
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> $GITHUB_ENV
-          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018"         >> $GITHUB_ENV
 
       - name: install frontend dependencies
         run: npm install
 
-      # ── FIX 3: Only init if gen/android doesn't already exist in the repo ─
       - name: initialize android project
         run: |
           if [ ! -d "src-tauri/gen/android" ]; then
@@ -85,14 +84,23 @@ jobs:
             echo "Android project already initialised — skipping init"
           fi
 
-      - name: build tauri android
-        run: npm run tauri android build -- --debug
+      - name: build android apk
+        run: |
+          npm run tauri android build -- \
+            --apk \
+            --target aarch64 \
+            -- --profile release-android
+
+      - name: find and upload apk
+        run: |
+          echo "=== APK files found ==="
+          find src-tauri/gen/android -name "*.apk" 2>/dev/null || echo "No APKs found"
 
       - name: upload android apk
         uses: actions/upload-artifact@v4
         with:
           name: Lector-TBO-Android
-          path: src-tauri/gen/android/app/build/outputs/apk/universal/debug/*.apk
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
 
   create-release:
     needs: [build-macos, build-android]
@@ -127,7 +135,7 @@ jobs:
             Automated build of Lector TBO.
             - **macOS (Apple Silicon)**: aarch64.dmg
             - **macOS (Intel)**: x86_64.dmg
-            - **Android**: debug.apk
+            - **Android (arm64)**: release APK
           draft: false
           prerelease: false
           files: |
