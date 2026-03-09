@@ -50,7 +50,7 @@ If you prefer to install manually:
 
 ## Features (v0.1)
 
-- ✅ Scans local folders for CBZ/CBR files
+- ✅ Scans local folders for CBZ/CBR files 
 - ✅ Extracts and caches cover thumbnails
 - ✅ Library grid view with covers
 - ✅ Metadata editing (title, series, issue, publisher, writer, artist, genre, tags, notes)
