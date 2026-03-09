@@ -61,14 +61,31 @@ jobs:
       - name: setup android sdk
         uses: android-actions/setup-android@v3
 
+      # ── FIX 1: Install the NDK (required for Rust cross-compilation) ──────
+      - name: install android ndk
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;27.2.12479018"
+
+      # ── FIX 2: Set NDK environment variables so Tauri + Cargo can find it ─
+      - name: set ndk environment
+        run: |
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> $GITHUB_ENV
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> $GITHUB_ENV
+
       - name: install frontend dependencies
         run: npm install
 
-      - name: initialize android (if missing)
-        run: npx tauri android init --ci
+      # ── FIX 3: Only init if gen/android doesn't already exist in the repo ─
+      - name: initialize android project
+        run: |
+          if [ ! -d "src-tauri/gen/android" ]; then
+            echo "Android project not found — running tauri android init"
+            npx tauri android init --ci
+          else
+            echo "Android project already initialised — skipping init"
+          fi
 
       - name: build tauri android
-        # We use --debug for now to avoid signing issues.
         run: npm run tauri android build -- --debug
 
       - name: upload android apk
