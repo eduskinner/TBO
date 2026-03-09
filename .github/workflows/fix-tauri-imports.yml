@@ -1,0 +1,32 @@
+name: Fix tauri api imports
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix-imports:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: restore original tsconfig.json
+        run: echo 'ewogICJjb21waWxlck9wdGlvbnMiOiB7CiAgICAidGFyZ2V0IjogIkVTMjAyMSIsCiAgICAidXNlRGVmaW5lRm9yQ2xhc3NGaWVsZHMiOiB0cnVlLAogICAgImxpYiI6IFsKICAgICAgIkVTMjAyMSIsCiAgICAgICJET00iLAogICAgICAiRE9NLkl0ZXJhYmxlIgogICAgXSwKICAgICJtb2R1bGUiOiAiRVNOZXh0IiwKICAgICJza2lwTGliQ2hlY2siOiB0cnVlLAogICAgIm1vZHVsZVJlc29sdXRpb24iOiAiYnVuZGxlciIsCiAgICAiYWxsb3dJbXBvcnRpbmdUc0V4dGVuc2lvbnMiOiB0cnVlLAogICAgInJlc29sdmVKc29uTW9kdWxlIjogdHJ1ZSwKICAgICJpc29sYXRlZE1vZHVsZXMiOiB0cnVlLAogICAgIm5vRW1pdCI6IHRydWUsCiAgICAianN4IjogInJlYWN0LWpzeCIsCiAgICAic3RyaWN0IjogdHJ1ZSwKICAgICJub1VudXNlZExvY2FscyI6IHRydWUsCiAgICAibm9VbnVzZWRQYXJhbWV0ZXJzIjogdHJ1ZSwKICAgICJub0ZhbGx0aHJvdWdoQ2FzZXNJblN3aXRjaCI6IHRydWUKICB9LAogICJpbmNsdWRlIjogWwogICAgInNyYyIKICBdLAogICJyZWZlcmVuY2VzIjogWwogICAgewogICAgICAicGF0aCI6ICIuL3RzY29uZmlnLm5vZGUuanNvbiIKICAgIH0KICBdCn0K' | base64 --decode > tsconfig.json
+
+      - name: fix @tauri-apps/api subpath imports in App.tsx
+        run: |
+          sed -i 's|from "@tauri-apps/api/tauri"|from "@tauri-apps/api"|g' src/App.tsx
+
+      - name: fix @tauri-apps/api subpath imports in MobileApp.tsx
+        run: |
+          sed -i 's|from "@tauri-apps/api/tauri"|from "@tauri-apps/api"|g' src/mobile/MobileApp.tsx
+          sed -i 's|from "@tauri-apps/api/event"|from "@tauri-apps/api"|g' src/mobile/MobileApp.tsx
+
+      - name: commit
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add tsconfig.json src/App.tsx src/mobile/MobileApp.tsx
+          git diff --cached --quiet || git commit -m 'fix: use @tauri-apps/api root imports, restore tsconfig'
+          git push
