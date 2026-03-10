@@ -499,9 +499,11 @@ function FolderView({ group, onOpenComic }: { group: FolderGroup; onOpenComic: (
 // ─────────────────────────────────────────────────────────────────────────────
 
 function MobileReader({ comic, onClose }: { comic: Comic; onClose: () => void }) {
+  const isPDF = comic.file_path.toLowerCase().endsWith(".pdf");
   const [page, setPage]           = useState(comic.current_page || 0);
   const [pageCount, setPageCount] = useState(comic.page_count || 0);
   const [imgSrc, setImgSrc]       = useState<string | null>(null);
+  const [pdfUrl, setPdfUrl]       = useState<string | null>(null);
   const [loading, setLoading]     = useState(true);
   const [showUI, setShowUI]       = useState(true);
   const [zoom, setZoom]           = useState(1);
@@ -529,12 +531,20 @@ function MobileReader({ comic, onClose }: { comic: Comic; onClose: () => void })
   }, [comic.file_path, pageCount]);
 
   useEffect(() => {
+    if (isPDF) {
+      // Load full PDF as data URL for the object viewer
+      setLoading(true);
+      invoke<string>("get_pdf_data_url", { filePath: comic.file_path })
+        .then(url => { setPdfUrl(url); setLoading(false); })
+        .catch(() => { setPdfUrl("error"); setLoading(false); });
+      return;
+    }
     setLoading(true);
     setImgSrc(null);
     loadPageHigh(comic.file_path, page)
       .then((src: string) => { setImgSrc(src); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [comic.file_path, page]);
+  }, [comic.file_path, page, isPDF]);
 
   useEffect(() => {
     if (page > 0) updateProgress(comic.id, page).catch(() => {});
@@ -557,6 +567,49 @@ function MobileReader({ comic, onClose }: { comic: Comic; onClose: () => void })
   }, [goPrev, goNext]);
 
   const pct = pageCount > 0 ? ((page + 1) / pageCount) * 100 : 0;
+
+  // ── PDF mode: render full document in an embedded viewer ──
+  if (isPDF) {
+    return (
+      <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 300, display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "env(safe-area-inset-top, 12px) 16px 12px", background: "rgba(0,0,0,0.85)" }}>
+          <button onClick={onClose} style={{ background: "rgba(255,255,255,0.15)", border: "none", borderRadius: 20, padding: "8px 12px", color: "#fff", display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 600 }}>
+            <ArrowLeft size={16} /> Back
+          </button>
+          <p style={{ color: "#fff", fontSize: 13, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {comic.title || comic.file_name}
+          </p>
+        </div>
+        <div style={{ flex: 1, position: "relative" }}>
+          {loading ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#fff" }}>
+              <Loader2 size={36} className="animate-spin" style={{ color: "var(--accent)" }} />
+            </div>
+          ) : pdfUrl === "error" ? (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", color: "#fff", gap: 16, padding: 24 }}>
+              <AlertCircle size={40} style={{ color: "#f87171" }} />
+              <p style={{ textAlign: "center", color: "#f87171" }}>Failed to load PDF</p>
+              <button onClick={() => invoke("open_with_system", { filePath: comic.file_path })}
+                style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 12, padding: "12px 24px", fontSize: 15, fontWeight: 600 }}>
+                Open with System Viewer
+              </button>
+            </div>
+          ) : (
+            <object data={pdfUrl ?? ""} type="application/pdf" style={{ width: "100%", height: "100%" }}>
+              {/* Fallback when object tag is not supported (older Android WebViews) */}
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 16, padding: 24 }}>
+                <p style={{ color: "#fff", textAlign: "center" }}>PDF viewer not available in this browser.</p>
+                <button onClick={() => invoke("open_with_system", { filePath: comic.file_path })}
+                  style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 12, padding: "12px 24px", fontSize: 15, fontWeight: 600 }}>
+                  Open with System Viewer
+                </button>
+              </div>
+            </object>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "#000", display: "flex", flexDirection: "column" }}>
