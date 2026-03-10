@@ -11,10 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: rewrite tauri-shims.d.ts
-        run: echo 'Ly8gQW1iaWVudCB0eXBlIGRlY2xhcmF0aW9ucyBmb3IgQHRhdXJpLWFwcHMvYXBpIHYxLngKLy8gRGVjbGFyZXMgdGhlIHJvb3QgbW9kdWxlIHNvIGJvdGggdHNjIGFuZCBSb2xsdXAgY2FuIHJlc29sdmUgaXQuCgpkZWNsYXJlIG1vZHVsZSAnQHRhdXJpLWFwcHMvYXBpJyB7CiAgZXhwb3J0IGZ1bmN0aW9uIGludm9rZTxUID0gdW5rbm93bj4oCiAgICBjbWQ6IHN0cmluZywKICAgIGFyZ3M/OiBSZWNvcmQ8c3RyaW5nLCB1bmtub3duPgogICk6IFByb21pc2U8VD47CgogIGV4cG9ydCB0eXBlIFVubGlzdGVuRm4gPSAoKSA9PiB2b2lkOwoKICBleHBvcnQgaW50ZXJmYWNlIFRhdXJpRXZlbnQ8VD4gewogICAgZXZlbnQ6IHN0cmluZzsKICAgIHdpbmRvd0xhYmVsOiBzdHJpbmc7CiAgICBpZDogbnVtYmVyOwogICAgcGF5bG9hZDogVDsKICB9CgogIGV4cG9ydCBmdW5jdGlvbiBsaXN0ZW48VD4oCiAgICBldmVudDogc3RyaW5nLAogICAgaGFuZGxlcjogKGV2ZW50OiBUYXVyaUV2ZW50PFQ+KSA9PiB2b2lkCiAgKTogUHJvbWlzZTxVbmxpc3RlbkZuPjsKCiAgZXhwb3J0IGZ1bmN0aW9uIG9uY2U8VD4oCiAgICBldmVudDogc3RyaW5nLAogICAgaGFuZGxlcjogKGV2ZW50OiBUYXVyaUV2ZW50PFQ+KSA9PiB2b2lkCiAgKTogUHJvbWlzZTxVbmxpc3RlbkZuPjsKCiAgZXhwb3J0IGZ1bmN0aW9uIGVtaXQoZXZlbnQ6IHN0cmluZywgcGF5bG9hZD86IHVua25vd24pOiBQcm9taXNlPHZvaWQ+OwoKICBleHBvcnQgaW50ZXJmYWNlIE9wZW5EaWFsb2dPcHRpb25zIHsKICAgIGRpcmVjdG9yeT86IGJvb2xlYW47CiAgICBtdWx0aXBsZT86IGJvb2xlYW47CiAgICBkZWZhdWx0UGF0aD86IHN0cmluZzsKICAgIGZpbHRlcnM/OiBBcnJheTx7IG5hbWU6IHN0cmluZzsgZXh0ZW5zaW9uczogc3RyaW5nW10gfT47CiAgICB0aXRsZT86IHN0cmluZzsKICB9CiAgZXhwb3J0IGZ1bmN0aW9uIG9wZW4oCiAgICBvcHRpb25zPzogT3BlbkRpYWxvZ09wdGlvbnMKICApOiBQcm9taXNlPHN0cmluZyB8IHN0cmluZ1tdIHwgbnVsbD47Cn0K' | base64 --decode > src/tauri-shims.d.ts
+      - name: write tauri-shims.d.ts
+        run: echo 'ZGVjbGFyZSBtb2R1bGUgJ0B0YXVyaS1hcHBzL2FwaScgewogIGV4cG9ydCBmdW5jdGlvbiBpbnZva2U8VCA9IHVua25vd24+KGNtZDogc3RyaW5nLCBhcmdzPzogUmVjb3JkPHN0cmluZywgdW5rbm93bj4pOiBQcm9taXNlPFQ+OwogIGV4cG9ydCB0eXBlIFVubGlzdGVuRm4gPSAoKSA9PiB2b2lkOwogIGV4cG9ydCBpbnRlcmZhY2UgVGF1cmlFdmVudDxUPiB7IGV2ZW50OiBzdHJpbmc7IHdpbmRvd0xhYmVsOiBzdHJpbmc7IGlkOiBudW1iZXI7IHBheWxvYWQ6IFQ7IH0KICBleHBvcnQgZnVuY3Rpb24gbGlzdGVuPFQ+KGV2ZW50OiBzdHJpbmcsIGhhbmRsZXI6IChldmVudDogVGF1cmlFdmVudDxUPikgPT4gdm9pZCk6IFByb21pc2U8VW5saXN0ZW5Gbj47CiAgZXhwb3J0IGZ1bmN0aW9uIG9uY2U8VD4oZXZlbnQ6IHN0cmluZywgaGFuZGxlcjogKGV2ZW50OiBUYXVyaUV2ZW50PFQ+KSA9PiB2b2lkKTogUHJvbWlzZTxVbmxpc3RlbkZuPjsKICBleHBvcnQgZnVuY3Rpb24gZW1pdChldmVudDogc3RyaW5nLCBwYXlsb2FkPzogdW5rbm93bik6IFByb21pc2U8dm9pZD47CiAgZXhwb3J0IGludGVyZmFjZSBPcGVuRGlhbG9nT3B0aW9ucyB7IGRpcmVjdG9yeT86IGJvb2xlYW47IG11bHRpcGxlPzogYm9vbGVhbjsgZGVmYXVsdFBhdGg/OiBzdHJpbmc7IGZpbHRlcnM/OiBBcnJheTx7IG5hbWU6IHN0cmluZzsgZXh0ZW5zaW9uczogc3RyaW5nW10gfT47IHRpdGxlPzogc3RyaW5nOyB9CiAgZXhwb3J0IGZ1bmN0aW9uIG9wZW4ob3B0aW9ucz86IE9wZW5EaWFsb2dPcHRpb25zKTogUHJvbWlzZTxzdHJpbmcgfCBzdHJpbmdbXSB8IG51bGw+Owp9Cg==' | base64 --decode > src/tauri-shims.d.ts
 
-      - name: rewrite all tauri-apps subpath imports to root across all source files
+      - name: rewrite all tauri-apps subpath imports to root
         run: |
           find src -name "*.ts" -o -name "*.tsx" | xargs sed -i \
             -e 's|from "@tauri-apps/api/tauri"|from "@tauri-apps/api"|g' \
@@ -22,7 +22,9 @@ jobs:
             -e 's|from "@tauri-apps/api/event"|from "@tauri-apps/api"|g' \
             -e "s|from '@tauri-apps/api/event'|from '@tauri-apps/api'|g" \
             -e 's|from "@tauri-apps/api/dialog"|from "@tauri-apps/api"|g' \
-            -e "s|from '@tauri-apps/api/dialog'|from '@tauri-apps/api'|g"
+            -e "s|from '@tauri-apps/api/dialog'|from '@tauri-apps/api'|g" \
+            -e 's|from "@tauri-apps/api/core"|from "@tauri-apps/api"|g' \
+            -e "s|from '@tauri-apps/api/core'|from '@tauri-apps/api'|g"
 
       - name: verify no subpath imports remain
         run: |
@@ -33,10 +35,10 @@ jobs:
             exit 1
           fi
 
-      - name: remove stray MobileApp.tsx at src root
+      - name: remove stray files
         run: rm -f src/MobileApp.tsx
 
-      - name: delete all workflow files except build.yml and this one
+      - name: delete all workflows except build.yml and this one
         run: |
           cd .github/workflows
           for f in *.yml; do
@@ -46,10 +48,10 @@ jobs:
             fi
           done
 
-      - name: commit everything
+      - name: commit
         run: |
           git config user.name  'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           git add -A
-          git diff --cached --quiet || git commit -m 'fix: root tauri imports + purge stale workflows'
+          git diff --cached --quiet || git commit -m 'fix: all tauri subpath imports to root + purge stale workflows'
           git push
