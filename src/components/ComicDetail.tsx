@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api";
 import { ArrowLeft, BookOpen, Trash2, Check, Star } from "lucide-react";
 import { useStore } from "../store";
 import type { Comic, ReadStatus } from "../types";

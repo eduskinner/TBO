@@ -4,8 +4,8 @@
  * then hands off to the pure Reader component.
  */
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api";
+import { listen } from "@tauri-apps/api";
 import { Loader2 } from "lucide-react";
 import Reader from "./Reader";
 import type { Comic } from "../types";
