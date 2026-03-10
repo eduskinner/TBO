@@ -11,47 +11,116 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: write tauri-shims.d.ts
-        run: echo 'ZGVjbGFyZSBtb2R1bGUgJ0B0YXVyaS1hcHBzL2FwaScgewogIGV4cG9ydCBmdW5jdGlvbiBpbnZva2U8VCA9IHVua25vd24+KGNtZDogc3RyaW5nLCBhcmdzPzogUmVjb3JkPHN0cmluZywgdW5rbm93bj4pOiBQcm9taXNlPFQ+OwogIGV4cG9ydCB0eXBlIFVubGlzdGVuRm4gPSAoKSA9PiB2b2lkOwogIGV4cG9ydCBpbnRlcmZhY2UgVGF1cmlFdmVudDxUPiB7IGV2ZW50OiBzdHJpbmc7IHdpbmRvd0xhYmVsOiBzdHJpbmc7IGlkOiBudW1iZXI7IHBheWxvYWQ6IFQ7IH0KICBleHBvcnQgZnVuY3Rpb24gbGlzdGVuPFQ+KGV2ZW50OiBzdHJpbmcsIGhhbmRsZXI6IChldmVudDogVGF1cmlFdmVudDxUPikgPT4gdm9pZCk6IFByb21pc2U8VW5saXN0ZW5Gbj47CiAgZXhwb3J0IGZ1bmN0aW9uIG9uY2U8VD4oZXZlbnQ6IHN0cmluZywgaGFuZGxlcjogKGV2ZW50OiBUYXVyaUV2ZW50PFQ+KSA9PiB2b2lkKTogUHJvbWlzZTxVbmxpc3RlbkZuPjsKICBleHBvcnQgZnVuY3Rpb24gZW1pdChldmVudDogc3RyaW5nLCBwYXlsb2FkPzogdW5rbm93bik6IFByb21pc2U8dm9pZD47CiAgZXhwb3J0IGludGVyZmFjZSBPcGVuRGlhbG9nT3B0aW9ucyB7IGRpcmVjdG9yeT86IGJvb2xlYW47IG11bHRpcGxlPzogYm9vbGVhbjsgZGVmYXVsdFBhdGg/OiBzdHJpbmc7IGZpbHRlcnM/OiBBcnJheTx7IG5hbWU6IHN0cmluZzsgZXh0ZW5zaW9uczogc3RyaW5nW10gfT47IHRpdGxlPzogc3RyaW5nOyB9CiAgZXhwb3J0IGZ1bmN0aW9uIG9wZW4ob3B0aW9ucz86IE9wZW5EaWFsb2dPcHRpb25zKTogUHJvbWlzZTxzdHJpbmcgfCBzdHJpbmdbXSB8IG51bGw+Owp9Cg==' | base64 --decode > src/tauri-shims.d.ts
-
-      - name: rewrite all tauri-apps subpath imports to root
+      # ── 1. Upgrade JS packages: v1 api+cli → v2 to match Tauri v2 Rust ──
+      - name: upgrade tauri JS packages to v2
         run: |
-          find src -name "*.ts" -o -name "*.tsx" | xargs sed -i \
-            -e 's|from "@tauri-apps/api/tauri"|from "@tauri-apps/api"|g' \
-            -e "s|from '@tauri-apps/api/tauri'|from '@tauri-apps/api'|g" \
-            -e 's|from "@tauri-apps/api/event"|from "@tauri-apps/api"|g' \
-            -e "s|from '@tauri-apps/api/event'|from '@tauri-apps/api'|g" \
-            -e 's|from "@tauri-apps/api/dialog"|from "@tauri-apps/api"|g' \
-            -e "s|from '@tauri-apps/api/dialog'|from '@tauri-apps/api'|g" \
-            -e 's|from "@tauri-apps/api/core"|from "@tauri-apps/api"|g' \
-            -e "s|from '@tauri-apps/api/core'|from '@tauri-apps/api'|g"
+          node - << 'EOF'
+          const fs = require('fs');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          pkg.dependencies['@tauri-apps/api'] = '^2.0.0';
+          pkg.dependencies['@tauri-apps/plugin-dialog'] = '^2.0.0';
+          pkg.devDependencies['@tauri-apps/cli'] = '^2.0.0';
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          console.log('package.json updated to Tauri v2');
+          EOF
 
-      - name: verify no subpath imports remain
+      # ── 2. Fix all imports to correct v2 paths ───────────────────────────
+      - name: fix all tauri imports to v2 paths
         run: |
-          COUNT=$(grep -r '@tauri-apps/api/' src --include="*.ts" --include="*.tsx" | wc -l)
-          echo "Remaining subpath imports: $COUNT"
+          python3 - << 'EOF'
+          import re, glob
+
+          for path in glob.glob('src/**/*.ts', recursive=True) + glob.glob('src/**/*.tsx', recursive=True):
+              content = open(path).read()
+              original = content
+
+              # invoke → @tauri-apps/api/core
+              content = re.sub(
+                  r'(import\s+\{[^}]*\binvoke\b[^}]*\}\s+from\s+["\'])@tauri-apps/api(?!/)',
+                  r'\1@tauri-apps/api/core',
+                  content
+              )
+              # listen / emit / once → @tauri-apps/api/event
+              content = re.sub(
+                  r'(import\s+\{[^}]*\b(?:listen|emit|once)\b[^}]*\}\s+from\s+["\'])@tauri-apps/api(?!/)',
+                  r'\1@tauri-apps/api/event',
+                  content
+              )
+              # open / save / ask / confirm → @tauri-apps/plugin-dialog
+              content = re.sub(
+                  r'(import\s+\{[^}]*\b(?:open|save|ask|confirm|message)\b[^}]*\}\s+from\s+["\'])@tauri-apps/api(?!/)',
+                  r'\1@tauri-apps/plugin-dialog',
+                  content
+              )
+
+              if content != original:
+                  print(f'Fixed: {path}')
+                  open(path, 'w').write(content)
+          EOF
+
+      # ── 3. Restore clean tsconfig (v2 api has proper types condition) ────
+      - name: restore tsconfig.json
+        run: |
+          cat > tsconfig.json << 'EOF'
+          {
+            "compilerOptions": {
+              "target": "ES2021",
+              "useDefineForClassFields": true,
+              "lib": ["ES2021", "DOM", "DOM.Iterable"],
+              "module": "ESNext",
+              "skipLibCheck": true,
+              "moduleResolution": "bundler",
+              "allowImportingTsExtensions": true,
+              "allowSyntheticDefaultImports": true,
+              "resolveJsonModule": true,
+              "isolatedModules": true,
+              "noEmit": true,
+              "jsx": "react-jsx",
+              "strict": true,
+              "noUnusedLocals": true,
+              "noUnusedParameters": true,
+              "noFallthroughCasesInSwitch": true
+            },
+            "include": ["src"],
+            "references": [{ "path": "./tsconfig.node.json" }]
+          }
+          EOF
+
+      # ── 4. Remove stray files from previous fix attempts ─────────────────
+      - name: remove stray files
+        run: |
+          rm -f src/MobileApp.tsx
+          rm -f src/tauri-shims.d.ts
+
+      # ── 5. Verify — show final import state, fail if bare root remains ───
+      - name: verify imports
+        run: |
+          echo "=== Final @tauri-apps imports ==="
+          grep -rn 'from.*@tauri-apps' src --include="*.ts" --include="*.tsx" | sort -u || true
+          echo ""
+          echo "=== Bare root imports (must be 0) ==="
+          COUNT=$(grep -rn "from ['\"]@tauri-apps/api['\"]" src --include="*.ts" --include="*.tsx" | wc -l)
+          echo "Count: $COUNT"
           if [ "$COUNT" -gt 0 ]; then
-            grep -r '@tauri-apps/api/' src --include="*.ts" --include="*.tsx"
+            grep -rn "from ['\"]@tauri-apps/api['\"]" src --include="*.ts" --include="*.tsx"
             exit 1
           fi
 
-      - name: remove stray files
-        run: rm -f src/MobileApp.tsx
-
-      - name: delete all workflows except build.yml and this one
+      # ── 6. Delete all stale workflows except build.yml and this one ──────
+      - name: delete stale workflows
         run: |
           cd .github/workflows
           for f in *.yml; do
             if [ "$f" != "build.yml" ] && [ "$f" != "apply-all-fixes.yml" ]; then
-              echo "Deleting $f"
+              echo "Deleting: $f"
               rm -f "$f"
             fi
           done
 
       - name: commit
         run: |
-          git config user.name  'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -A
-          git diff --cached --quiet || git commit -m 'fix: all tauri subpath imports to root + purge stale workflows'
+          git diff --cached --quiet || git commit -m "fix: Tauri v2 JS packages + correct all imports + purge stale workflows"
           git push
