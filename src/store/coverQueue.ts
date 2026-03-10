@@ -7,7 +7,7 @@
  * 2. Results are cached in memory — navigating back is instant.
  * 3. preloadCovers() queues an entire folder for background loading.
  */
-import { invoke } from "@tauri-apps/api";
+import { invoke } from "@tauri-apps/api/core";
 
 interface CoverRequest { comic_id: string; file_path: string; }
 interface CoverResult  { comic_id: string; data: string | null; }

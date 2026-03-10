@@ -9,7 +9,7 @@
  * Total simultaneous Tauri invokes = 5 max.
  * Navigating fires HIGH requests immediately; they can always grab a slot.
  */
-import { invoke } from "@tauri-apps/api";
+import { invoke } from "@tauri-apps/api/core";
 
 const HIGH_CONCURRENCY = 3;
 const LOW_CONCURRENCY  = 2;

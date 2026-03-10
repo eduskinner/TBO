@@ -12,8 +12,8 @@
 import React, {
   useState, useEffect, useCallback, useRef, useMemo,
 } from "react";
-import { invoke } from "@tauri-apps/api";
-import { listen } from "@tauri-apps/api";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import {
   Menu, X, ChevronLeft, Search, RefreshCw, FolderPlus,
   Loader2, FolderOpen, Settings, Library,

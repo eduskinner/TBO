@@ -1,7 +1,7 @@
 import React, {
   useState, useEffect, useCallback, useRef, useMemo,
 } from "react";
-import { invoke } from "@tauri-apps/api";
+import { invoke } from "@tauri-apps/api/core";
 import {
   ChevronLeft, ChevronRight, ChevronUp, ChevronDown,
   Maximize2, Minimize2, X, Settings2, BookOpen, ZoomIn,
