@@ -1,7 +1,7 @@
 [package]
 name = "panels"
 version = "0.1.0"
-description = "Panels — Comic Reader & Library Manager"
+description = "Lector TBO — Comic Reader & Library Manager"
 authors = []
 edition = "2021"
 default-run = "panels"

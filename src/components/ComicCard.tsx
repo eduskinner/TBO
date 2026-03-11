@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { loadCover, placeholderColor } from "../store/coverQueue";
-import { BookOpen, AlertCircle, Trash2 } from "lucide-react";
-import { useStore } from "../store";
+import { BookOpen } from "lucide-react";
 import type { Comic } from "../types";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -20,7 +19,6 @@ export default function ComicCard({ comic, onClick }: Props) {
   const [visible, setVisible] = useState(false);   // has entered viewport
   const [loaded,  setLoaded]  = useState(false);   // img onLoad fired
   const ref = useRef<HTMLButtonElement>(null);
-  const { deleteComic } = useStore();
 
   // Trigger load when card scrolls into view (200px lookahead)
   useEffect(() => {
@@ -120,36 +118,11 @@ export default function ComicCard({ comic, onClick }: Props) {
           </div>
         )}
 
-        {/* Missing Badge */}
-        {comic.missing && (
-          <div
-            className="absolute top-2 left-2 flex items-center gap-1.5 px-2 py-1 rounded-md bg-red-500/90 text-white"
-            style={{ backdropFilter: "blur(4px)", boxShadow: "0 2px 8px rgba(0,0,0,0.3)" }}
-          >
-            <AlertCircle size={10} strokeWidth={3} />
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase" }}>Missing</span>
-          </div>
-        )}
-
         {/* Hover overlay */}
         <div
           className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 60%)" }}
+          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 55%)" }}
         >
-          {/* Quick Remove Button */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (confirm("Remove this comic from your library? (The file on disk will NOT be deleted)")) {
-                deleteComic(comic.id);
-              }
-            }}
-            className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/40 hover:bg-red-500/80 text-white/70 hover:text-white transition-all transform scale-90 group-hover:scale-100"
-            title="Remove from Library"
-            style={{ backdropFilter: "blur(4px)" }}
-          >
-            <Trash2 size={13} />
-          </button>
           {comic.page_count > 0 && (
             <span
               className="absolute bottom-2 right-2"

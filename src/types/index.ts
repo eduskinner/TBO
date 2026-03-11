@@ -25,7 +25,6 @@ export interface Comic {
   cover_cached: boolean;
   date_added: string;
   file_size: number;
-  missing: boolean;
 }
 
 export interface Source {

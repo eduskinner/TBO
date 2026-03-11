@@ -1,39 +1,72 @@
 {
-  "productName": "Panels",
-  "version": "0.1.0",
-  "identifier": "com.panels.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
-    "devUrl": "http://localhost:1420",
-    "frontendDist": "../dist"
+    "devPath": "http://localhost:1420",
+    "distDir": "../dist",
+    "withGlobalTauri": false
   },
-  "app": {
-    "withGlobalTauri": false,
+  "package": {
+    "productName": "Lector TBO",
+    "version": "0.1.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "dialog": {
+        "open": true
+      },
+      "fs": {
+        "all": true,
+        "scope": [
+          "$HOME/**",
+          "$APPDATA/**",
+          "$APPDATA/panels/**",
+          "$RESOURCE/**",
+          "$CACHE/**"
+        ]
+      },
+      "path": {
+        "all": true
+      },
+      "shell": {
+        "open": true
+      },
+      "window": {
+        "all": false,
+        "create": true,
+        "close": true,
+        "setFocus": true,
+        "unminimize": true,
+        "setTitle": true,
+        "setResizable": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "targets": "all",
+      "identifier": "com.panels.app",
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ]
+    },
+    "security": {
+      "csp": null
+    },
     "windows": [
       {
         "fullscreen": false,
         "resizable": true,
-        "title": "Panels",
+        "title": "Lector TBO",
         "width": 1400,
         "height": 900,
         "minWidth": 900,
         "minHeight": 600
       }
-    ],
-    "security": {
-      "csp": null
-    }
-  },
-  "bundle": {
-    "active": true,
-    "targets": "all",
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
     ]
   }
 }

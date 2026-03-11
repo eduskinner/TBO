@@ -61,7 +61,7 @@ export default function ReaderWindow() {
       <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
         height:"100vh", background:"#0C0C0E", gap:16 }}>
         <span style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:28, letterSpacing:4, color:"#E8A830" }}>
-          PANELS
+          LECTOR TBO
         </span>
         <Loader2 size={22} className="animate-spin" style={{ color:"#E8A830" }} />
         <p style={{ fontSize:12, color:"#55555F", fontFamily:"monospace" }}>Loading comic…</p>

@@ -25,15 +25,12 @@ export default function Sidebar() {
       {/* Logo */}
       <div
         data-tauri-drag-region
-        className="flex items-center justify-center px-5 pt-8 pb-5"
+        className="flex items-end px-5 pt-8 pb-5"
         style={{ borderBottom: "1px solid var(--border)" }}
       >
-        <img
-          src="/tbo-logo.png"
-          alt="TBO Logo"
-          style={{ width: "120px", height: "auto", objectFit: "contain", pointerEvents: "none" }}
-          draggable={false}
-        />
+        <span style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:28, letterSpacing:2, color:"var(--accent)", lineHeight:1 }}>
+          LECTOR TBO
+        </span>
       </div>
 
       {/* Nav */}

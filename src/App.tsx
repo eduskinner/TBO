@@ -37,7 +37,7 @@ class ErrorBoundary extends React.Component<
       return (
         <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
           height:"100vh", background:"#0C0C0E", color:"#F0EDE8", fontFamily:"monospace", padding:40, gap:16 }}>
-          <p style={{ color:"#E8A830", fontSize:18, fontWeight:"bold" }}>Panels encountered an error</p>
+          <p style={{ color:"#E8A830", fontSize:18, fontWeight:"bold" }}>Lector TBO encountered an error</p>
           <pre style={{ background:"#18181D", padding:16, borderRadius:8, fontSize:12, color:"#f87171",
             maxWidth:700, overflowX:"auto", whiteSpace:"pre-wrap", wordBreak:"break-all" }}>
             {this.state.error.message}{"\n\n"}{this.state.error.stack}
@@ -60,7 +60,7 @@ function Splash() {
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
       height:"100vh", background:"#0C0C0E", gap:16 }}>
       <span style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:32, letterSpacing:4, color:"#E8A830" }}>
-        PANELS
+        LECTOR TBO
       </span>
       <div style={{ width:24, height:24, border:"2px solid #3A3A4A", borderTopColor:"#E8A830",
         borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
