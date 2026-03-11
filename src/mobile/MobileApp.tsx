@@ -58,19 +58,31 @@ function groupByFolder(comics: Comic[]): FolderGroup[] {
 // Shared scan helper — bypasses native file picker (broken on Android)
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function scanPath(path: string) {
+// Result type extended with a permission-denied flag for Android
+interface ScanResultExtended extends ScanResult { permissionDenied?: boolean; }
+
+async function scanPath(path: string): Promise<ScanResultExtended> {
   useStore.setState({ scanning: true, scanResult: null, scanProgress: null });
   const unlisten = await listen<ScanProgress>("scan_progress", (ev: { payload: ScanProgress }) => {
     useStore.setState({ scanProgress: ev.payload });
   });
   try {
     const result = await invoke<ScanResult>("scan_folder", { folderPath: path });
-    useStore.setState({ scanResult: result, scanning: false, scanProgress: null });
+    // Heuristic: if 0 added AND 0 skipped AND the path looks like external storage,
+    // it is very likely a permission denial (WalkDir silently returns nothing).
+    const looksExternal = path.startsWith("/storage/") || path.startsWith("/sdcard");
+    const extended: ScanResultExtended = {
+      ...result,
+      permissionDenied: looksExternal && result.added === 0 && result.skipped === 0,
+    };
+    useStore.setState({ scanResult: extended, scanning: false, scanProgress: null });
     await useStore.getState().loadLibrary();
     await useStore.getState().loadSources();
+    return extended;
   } catch (e) {
     console.error("scan_folder:", e);
     useStore.setState({ scanning: false, scanProgress: null });
+    return { added: 0, skipped: 0, errors: [String(e)] };
   } finally {
     unlisten();
   }
@@ -107,12 +119,17 @@ function CoverImage({ comic }: { comic: Comic }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 function AddFolderModal({ onClose }: { onClose: () => void }) {
-  const [path, setPath] = useState("/storage/emulated/0");
+  const [path, setPath] = useState("/storage/emulated/0/Download");
+  const [permWarn, setPermWarn] = useState(false);
 
-  const handleScan = () => {
+  const handleScan = async () => {
     if (!path.trim()) return;
-    scanPath(path.trim());
-    onClose();
+    const result = await scanPath(path.trim());
+    if (result.permissionDenied) {
+      setPermWarn(true);   // stay open and show permission warning
+    } else {
+      onClose();
+    }
   };
 
   return (
@@ -176,6 +193,29 @@ function AddFolderModal({ onClose }: { onClose: () => void }) {
           </p>
         </div>
 
+        {/* Permission warning — shown after a scan returns 0 results on external storage */}
+        {permWarn && (
+          <div style={{ margin: "0 20px 16px", padding: "14px 16px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 12 }}>
+            <p style={{ fontSize: 13, color: "#f87171", fontWeight: 700, marginBottom: 6 }}>
+              ⚠ Storage permission required
+            </p>
+            <p style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5, marginBottom: 12 }}>
+              No files were found. This usually means the app hasn&apos;t been granted
+              storage access. Please follow these steps:
+            </p>
+            <ol style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.8, paddingLeft: 18, marginBottom: 12 }}>
+              <li>Open <strong style={{ color: "var(--text)" }}>Android Settings</strong></li>
+              <li>Go to <strong style={{ color: "var(--text)" }}>Apps → Lector TBO</strong></li>
+              <li>Tap <strong style={{ color: "var(--text)" }}>Permissions → Files and media</strong></li>
+              <li>Select <strong style={{ color: "var(--text)" }}>Allow management of all files</strong></li>
+              <li>Return here and tap <strong style={{ color: "var(--text)" }}>Scan This Folder</strong> again</li>
+            </ol>
+            <p style={{ fontSize: 11, color: "var(--text3)" }}>
+              On some phones this is under Special App Access → All Files Access
+            </p>
+          </div>
+        )}
+
         <div style={{ padding: "0 20px" }}>
           <button
             onClick={handleScan}
@@ -186,7 +226,7 @@ function AddFolderModal({ onClose }: { onClose: () => void }) {
               border: "none", borderRadius: 12,
               fontWeight: 700, fontSize: 15, letterSpacing: 0.5,
             }}>
-            Scan This Folder
+            {permWarn ? "Try Again" : "Scan This Folder"}
           </button>
         </div>
       </div>
