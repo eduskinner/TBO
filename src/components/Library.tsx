@@ -50,7 +50,7 @@ const SORT_OPTIONS: { value: SortField; label: string }[] = [
 
 export default function Library() {
   const {
-    comics, filteredComics, loading, scanning, scanResult, scanProgress,
+    comics, loading, scanning, scanResult, scanProgress,
     searchQuery, sortField, sortAsc, filterStatus,
     setSearch, setSort, toggleSortDir, setFilterStatus,
     openReader, rescanSources, openAddFolder,
