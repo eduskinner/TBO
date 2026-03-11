@@ -11,12 +11,14 @@ import ReaderWindow from "./components/ReaderWindow";
 // The reader window loads index.html#reader; the main window loads index.html
 function isReaderWindow(): boolean {
   if (typeof window === "undefined") return false;
-  // Primary: hash set by open_reader_window Rust command
+  // Primary: hash preserved in URL by Tauri WebviewUrl::App("index.html#reader")
   if (window.location.hash === "#reader") return true;
-  // Fallback: Tauri v2 metadata (v1 path kept for safety)
+  // Fallback: check all known Tauri v2 window label paths
   try {
-    const meta = (window as any).__TAURI_INTERNALS__?.metadata
-              ?? (window as any).__TAURI_METADATA__;
+    const internals = (window as any).__TAURI_INTERNALS__;
+    if (internals?.metadata?.currentWindow?.label === "reader") return true;
+    if (internals?.currentWindow?.label === "reader") return true;
+    const meta = (window as any).__TAURI_METADATA__;
     if (meta?.currentWindow?.label === "reader") return true;
   } catch {}
   return false;

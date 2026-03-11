@@ -1,7 +1,7 @@
 {
   "productName": "Lector TBO",
   "version": "0.1.0",
-  "identifier": "com.lectortbo.app",
+  "identifier": "com.lectortbo.reader",
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",

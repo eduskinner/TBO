@@ -984,6 +984,12 @@ fn open_reader_window(
         let mut id = state.reader_comic_id.lock().map_err(|e| e.to_string())?;
         *id = comic_id;
     }
+    // If reader window already exists, focus it and tell it to reload the new comic
+    if let Some(win) = app.get_webview_window("reader") {
+        win.set_focus().map_err(|e| e.to_string())?;
+        win.emit("reload_comic", ()).map_err(|e| e.to_string())?;
+        return Ok(());
+    }
     let builder = tauri::webview::WebviewWindowBuilder::new(
         &app,
         "reader",

@@ -405,6 +405,12 @@ export default function Reader({ comic, onClose }: Props) {
     return () => observer.disconnect();
   }, [onImgLoad]);
 
+  // When layout or page changes, trigger detection immediately if img is already loaded
+  // (cached images may not re-fire onLoad after key-change remount)
+  useEffect(() => {
+    if (imgRef.current?.complete) onImgLoad();
+  }, [layout, effectivePage]); // eslint-disable-line
+
   // ── Compute the CSS transform ────────────────────────────────────────────
   //
   // DESIGN: image always has maxWidth/maxHeight:100% (contained).
@@ -503,6 +509,20 @@ export default function Reader({ comic, onClose }: Props) {
           {isGuided && src && currentPanels.length === 0 && (
             <Pill bg="var(--bg3)" color="var(--text3)">detecting…</Pill>
           )}
+          {isGuided && (
+            <>
+              <button onClick={e => { e.stopPropagation(); goBack(); }}
+                style={{ color:"var(--text3)", background:"none", border:"none",
+                         cursor:"pointer", padding:"2px 6px", fontSize:11 }}>
+                ‹ Prev
+              </button>
+              <button onClick={e => { e.stopPropagation(); goForward(); }}
+                style={{ color:"var(--text3)", background:"none", border:"none",
+                         cursor:"pointer", padding:"2px 6px", fontSize:11 }}>
+                Next ›
+              </button>
+            </>
+          )}
 
           <button onClick={() => setShowSettings(v => !v)}
             style={{ color:showSettings?"var(--accent)":"var(--text3)",
@@ -586,7 +606,9 @@ export default function Reader({ comic, onClose }: Props) {
 
         {/* Zoom controls — only shown in single-page mode */}
         {!hideUI && !isGuided && (
-          <div style={{
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
             position:"absolute", bottom:12, right:14, zIndex:15,
             display:"flex", alignItems:"center", gap:1,
             background:"rgba(8,8,12,0.78)", backdropFilter:"blur(8px)",
