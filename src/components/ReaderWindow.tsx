@@ -3,7 +3,7 @@
  * Retrieves the comic to display from the main process via IPC,
  * then hands off to the pure Reader component.
  */
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Loader2 } from "lucide-react";

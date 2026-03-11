@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { ArrowLeft, BookOpen, Trash2, Check, Star } from "lucide-react";
 import { useStore } from "../store";
 import type { Comic, ReadStatus } from "../types";
 
 export default function ComicDetail() {
-  const { selectedComic, goLibrary, openReader, updateComic, deleteComic } = useStore();
+  const { selectedComic, goLibrary, openReader, updateComic, toggleRead, deleteComic } = useStore();
   const [form, setForm] = useState<Comic | null>(null);
   const [cover, setCover] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
