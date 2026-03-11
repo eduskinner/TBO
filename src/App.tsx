@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { invoke } from "@tauri-apps/api/tauri";
+import { invoke } from "@tauri-apps/api/core";
 import { useStore } from "./store";
 import Sidebar from "./components/Sidebar";
 import Library from "./components/Library";
@@ -13,7 +13,7 @@ function isReaderWindow(): boolean {
   if (typeof window === "undefined") return false;
   // Primary: hash set by open_reader_window Rust command
   if (window.location.hash === "#reader") return true;
-  // Fallback: Tauri v1 metadata
+  // Fallback: Tauri v2 metadata (v1 path kept for safety)
   try {
     const meta = (window as any).__TAURI_INTERNALS__?.metadata
               ?? (window as any).__TAURI_METADATA__;
