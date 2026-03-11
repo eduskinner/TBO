@@ -62,6 +62,20 @@ jobs:
           if [ ! -d "src-tauri/gen/android" ]; then
             npx tauri android init --ci
           fi
+
+      - name: patch AndroidManifest storage permissions
+        run: |
+          MANIFEST="src-tauri/gen/android/app/src/main/AndroidManifest.xml"
+          # Only patch if permissions not already present
+          if ! grep -q "READ_EXTERNAL_STORAGE" "$MANIFEST"; then
+            # Insert storage permissions before the <application tag
+            sed -i 's|<application|<!-- External storage: required to read CBR/PDF from Downloads \& custom folders -->\n    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />\n    <!-- Android 11+ broad file access (needed for non-media files like CBR/PDF) -->\n    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />\n    <application|' "$MANIFEST"
+            echo "Patched AndroidManifest.xml with storage permissions"
+            grep -A2 "EXTERNAL_STORAGE" "$MANIFEST"
+          else
+            echo "Permissions already present, skipping patch"
+          fi
+
       - name: build android apk
         run: npm run tauri android build -- --apk --target aarch64 --debug
       - uses: actions/upload-artifact@v4
