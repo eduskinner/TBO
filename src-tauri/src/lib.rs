@@ -73,9 +73,11 @@ pub struct AppState {
 
 fn init_db(conn: &Connection) -> SqlResult<()> {
     conn.execute_batch(
-        "PRAGMA journal_mode=DELETE;
+        "PRAGMA journal_mode=WAL;
          PRAGMA foreign_keys=ON;
          PRAGMA busy_timeout=5000;
+         PRAGMA cache_size=-8000;
+         PRAGMA synchronous=NORMAL;
 
          CREATE TABLE IF NOT EXISTS comics (
              id           TEXT PRIMARY KEY,
@@ -106,6 +108,11 @@ fn init_db(conn: &Connection) -> SqlResult<()> {
              name TEXT NOT NULL,
              path TEXT NOT NULL UNIQUE
          );
+
+         CREATE INDEX IF NOT EXISTS idx_comics_series       ON comics(series);
+         CREATE INDEX IF NOT EXISTS idx_comics_cover_cached ON comics(cover_cached);
+         CREATE INDEX IF NOT EXISTS idx_comics_read_status  ON comics(read_status);
+         CREATE INDEX IF NOT EXISTS idx_comics_date_added   ON comics(date_added);
         ",
     )?;
 
@@ -826,11 +833,16 @@ async fn precache_all_covers(
     .map_err(|e| e.to_string())?;
 
     if let Ok(conn) = state.db.lock() {
-        for comic_id in &generated {
-            let _ = conn.execute(
-                "UPDATE comics SET cover_cached=1 WHERE id=?1",
-                params![comic_id],
-            );
+        if !generated.is_empty() {
+            let placeholders = generated.iter().enumerate()
+                .map(|(i, _)| format!("?{}", i + 1))
+                .collect::<Vec<_>>()
+                .join(",");
+            let sql = format!("UPDATE comics SET cover_cached=1 WHERE id IN ({})", placeholders);
+            let params: Vec<&dyn rusqlite::ToSql> = generated.iter()
+                .map(|s| s as &dyn rusqlite::ToSql)
+                .collect();
+            let _ = conn.execute(&sql, params.as_slice());
         }
     }
     let _ = app.emit("covers_precached", generated.len() as u32);
@@ -986,7 +998,8 @@ fn open_reader_window(
     }
     // If reader window already exists, focus it and tell it to reload the new comic
     if let Some(win) = app.get_webview_window("reader") {
-        win.set_focus().map_err(|e| e.to_string())?;
+        #[cfg(desktop)]
+        let _ = win.set_focus();
         win.emit("reload_comic", ()).map_err(|e| e.to_string())?;
         return Ok(());
     }
