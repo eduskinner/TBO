@@ -987,7 +987,7 @@ fn open_reader_window(
     let builder = tauri::webview::WebviewWindowBuilder::new(
         &app,
         "reader",
-        tauri::WebviewUrl::App("index.html".into()),
+        tauri::WebviewUrl::App("index.html#reader".into()),
     );
     #[cfg(desktop)]
     let builder = builder.title("Lector TBO - Reader").inner_size(1200.0, 800.0);

@@ -1,12 +1,26 @@
 import React, { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/tauri";
 import { useStore } from "./store";
 import Sidebar from "./components/Sidebar";
 import Library from "./components/Library";
 import ComicDetail from "./components/ComicDetail";
 import Settings from "./components/Settings";
 import ReaderWindow from "./components/ReaderWindow";
-import MobileApp from "./mobile/MobileApp";
-import { isMobile } from "./mobile/usePlatform";
+
+// ── Detect which Tauri window we are ─────────────────────────────────────────
+// The reader window loads index.html#reader; the main window loads index.html
+function isReaderWindow(): boolean {
+  if (typeof window === "undefined") return false;
+  // Primary: hash set by open_reader_window Rust command
+  if (window.location.hash === "#reader") return true;
+  // Fallback: Tauri v1 metadata
+  try {
+    const meta = (window as any).__TAURI_INTERNALS__?.metadata
+              ?? (window as any).__TAURI_METADATA__;
+    if (meta?.currentWindow?.label === "reader") return true;
+  } catch {}
+  return false;
+}
 
 // ── Error Boundary ────────────────────────────────────────────────────────────
 class ErrorBoundary extends React.Component<
@@ -40,13 +54,13 @@ class ErrorBoundary extends React.Component<
   }
 }
 
-// ── Splash ────────────────────────────────────────────────────────────────────
+// ── Splash / error screens ────────────────────────────────────────────────────
 function Splash() {
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
       height:"100vh", background:"#0C0C0E", gap:16 }}>
       <span style={{ fontFamily:"'Bebas Neue',sans-serif", fontSize:32, letterSpacing:4, color:"#E8A830" }}>
-        LECTOR TBO
+        PANELS
       </span>
       <div style={{ width:24, height:24, border:"2px solid #3A3A4A", borderTopColor:"#E8A830",
         borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
@@ -71,11 +85,11 @@ function StartupError({ msg, onRetry }: { msg: string; onRetry: () => void }) {
   );
 }
 
-// ── Desktop main window ───────────────────────────────────────────────────────
-function DesktopApp() {
+// ── Main library window ───────────────────────────────────────────────────────
+function MainApp() {
   const { view, loadLibrary, loadSources } = useStore();
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [ready, setReady]               = useState(false);
+  const [error, setError]               = useState<string | null>(null);
 
   const init = React.useCallback(async () => {
     setError(null);
@@ -86,6 +100,8 @@ function DesktopApp() {
         await loadLibrary();
         await loadSources();
         setReady(true);
+        // Fire-and-forget: generate any missing cover thumbnails in parallel
+        invoke("precache_all_covers").catch(() => {});
       } catch (e: any) {
         if (attempts < 20) setTimeout(tryInit, 300);
         else {
@@ -114,61 +130,12 @@ function DesktopApp() {
   );
 }
 
-// ── Mobile main window ────────────────────────────────────────────────────────
-function MobileMain() {
-  const { loadLibrary, loadSources } = useStore();
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const init = React.useCallback(async () => {
-    setError(null);
-    let attempts = 0;
-    const tryInit = async () => {
-      attempts++;
-      try {
-        await loadLibrary();
-        await loadSources();
-        setReady(true);
-      } catch (e: any) {
-        if (attempts < 20) setTimeout(tryInit, 300);
-        else {
-          setError(String(e?.message ?? e));
-          setReady(true);
-        }
-      }
-    };
-    tryInit();
-  }, [loadLibrary, loadSources]);
-
-  useEffect(() => { init(); }, [init]);
-
-  if (!ready) return <Splash />;
-  if (error)  return <StartupError msg={error} onRetry={() => { setReady(false); init(); }} />;
-
-  return <MobileApp />;
-}
-
-// ── Detect reader window (desktop only) ──────────────────────────────────────
-function isReaderWindow(): boolean {
-  if (typeof window === "undefined") return false;
-  if (window.location.hash === "#reader") return true;
-  try {
-    const meta = (window as any).__TAURI_METADATA__;
-    if (meta?.currentWindow?.label === "reader") return true;
-  } catch {}
-  return false;
-}
-
 // ── Root ──────────────────────────────────────────────────────────────────────
 export default function App() {
-  const mobile = isMobile();
-  const reader = !mobile && isReaderWindow();
-
+  const reader = isReaderWindow();
   return (
     <ErrorBoundary>
-      {reader  ? <ReaderWindow /> :
-       mobile  ? <MobileMain /> :
-                 <DesktopApp />}
+      {reader ? <ReaderWindow /> : <MainApp />}
     </ErrorBoundary>
   );
 }
