@@ -795,10 +795,12 @@ async fn precache_all_covers(
         let mut stmt = conn
             .prepare("SELECT id, file_path FROM comics WHERE cover_cached=0")
             .map_err(|e| e.to_string())?;
-        stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+        let rows: Vec<(String, String)> = stmt
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
             .map_err(|e| e.to_string())?
             .filter_map(|r| r.ok())
-            .collect()
+            .collect();
+        rows
     };
 
     let items: Vec<(String, String, PathBuf)> = raw_comics
