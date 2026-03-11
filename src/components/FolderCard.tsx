@@ -5,7 +5,7 @@
  * At the folder level there are typically < 50 cards, so loading all first
  * covers immediately is cheap and avoids grey cards entirely.
  */
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { loadCover, placeholderColor } from "../store/coverQueue";
 import { FolderOpen } from "lucide-react";
 import type { Comic } from "../types";
