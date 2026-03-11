@@ -1,0 +1,21 @@
+name: Fix tauri.conf.json
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: write tauri.conf.json v2
+        run: echo 'ewogICJwcm9kdWN0TmFtZSI6ICJQYW5lbHMiLAogICJ2ZXJzaW9uIjogIjAuMS4wIiwKICAiaWRlbnRpZmllciI6ICJjb20ucGFuZWxzLmFwcCIsCiAgImJ1aWxkIjogewogICAgImJlZm9yZURldkNvbW1hbmQiOiAibnBtIHJ1biBkZXYiLAogICAgImJlZm9yZUJ1aWxkQ29tbWFuZCI6ICJucG0gcnVuIGJ1aWxkIiwKICAgICJkZXZVcmwiOiAiaHR0cDovL2xvY2FsaG9zdDoxNDIwIiwKICAgICJmcm9udGVuZERpc3QiOiAiLi4vZGlzdCIKICB9LAogICJhcHAiOiB7CiAgICAid2l0aEdsb2JhbFRhdXJpIjogZmFsc2UsCiAgICAid2luZG93cyI6IFsKICAgICAgewogICAgICAgICJmdWxsc2NyZWVuIjogZmFsc2UsCiAgICAgICAgInJlc2l6YWJsZSI6IHRydWUsCiAgICAgICAgInRpdGxlIjogIlBhbmVscyIsCiAgICAgICAgIndpZHRoIjogMTQwMCwKICAgICAgICAiaGVpZ2h0IjogOTAwLAogICAgICAgICJtaW5XaWR0aCI6IDkwMCwKICAgICAgICAibWluSGVpZ2h0IjogNjAwCiAgICAgIH0KICAgIF0sCiAgICAic2VjdXJpdHkiOiB7CiAgICAgICJjc3AiOiBudWxsCiAgICB9CiAgfSwKICAiYnVuZGxlIjogewogICAgImFjdGl2ZSI6IHRydWUsCiAgICAidGFyZ2V0cyI6ICJhbGwiLAogICAgImljb24iOiBbCiAgICAgICJpY29ucy8zMngzMi5wbmciLAogICAgICAiaWNvbnMvMTI4eDEyOC5wbmciLAogICAgICAiaWNvbnMvMTI4eDEyOEAyeC5wbmciLAogICAgICAiaWNvbnMvaWNvbi5pY25zIiwKICAgICAgImljb25zL2ljb24uaWNvIgogICAgXQogIH0KfQo=' | base64 --decode > src-tauri/tauri.conf.json
+      - name: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src-tauri/tauri.conf.json
+          git diff --cached --quiet || git commit -m "fix: tauri.conf.json v2 format"
+          git push
