@@ -1,0 +1,32 @@
+name: Cleanup Workflows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: delete all workflows except build.yml
+        run: |
+          cd .github/workflows
+          for f in *.yml; do
+            if [ "$f" != "build.yml" ]; then
+              echo "Deleting $f"
+              rm -f "$f"
+            else
+              echo "Keeping $f"
+            fi
+          done || true
+
+      - name: commit
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet || git commit -m "chore: remove all fix workflows, keep build.yml only"
+          git push
