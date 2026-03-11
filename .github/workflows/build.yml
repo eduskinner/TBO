@@ -1,11 +1,9 @@
 name: Build and Release
-
 on:
   push:
     branches:
       - main
   workflow_dispatch:
-
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -14,85 +12,64 @@ jobs:
         architecture: [x86_64, aarch64]
     steps:
       - uses: actions/checkout@v4
-
       - name: setup node
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.architecture == 'x86_64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}
-
       - name: install frontend dependencies
         run: npm install
-
       - name: build tauri desktop
         run: npm run tauri build -- --target ${{ matrix.architecture == 'x86_64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}
-
+        env:
+          APPLE_SIGNING_IDENTITY: "-"
       - name: upload macos dmg
         uses: actions/upload-artifact@v4
         with:
           name: Lector-TBO-macOS-${{ matrix.architecture }}
           path: src-tauri/target/${{ matrix.architecture == 'x86_64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}/release/bundle/dmg/*.dmg
-
   build-android:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: setup node
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
-
       - name: setup java
         uses: actions/setup-java@v4
         with:
           distribution: zulu
           java-version: '17'
-
       - name: setup android sdk
         uses: android-actions/setup-android@v3
-
       - name: install android ndk
         run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;27.2.12479018"
-
       - name: set ndk environment
         run: |
           echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> $GITHUB_ENV
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> $GITHUB_ENV
-
       - name: install frontend dependencies
         run: npm install
-
       - name: initialize android project
         run: |
           if [ ! -d "src-tauri/gen/android" ]; then
             npx tauri android init --ci
           fi
-
       - name: build android apk
         run: npm run tauri android build -- --apk --target aarch64 --debug
-
-      - name: find apk
-        run: |
-          echo "=== All APKs produced ==="
-          find src-tauri/gen/android -name "*.apk" 2>/dev/null
-          echo "=== End ==="
-
       - name: upload android apk
         uses: actions/upload-artifact@v4
         with:
           name: Lector-TBO-Android
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
-
   create-release:
     needs: [build-macos, build-android]
     runs-on: ubuntu-latest
@@ -104,19 +81,16 @@ jobs:
         with:
           name: Lector-TBO-macOS-aarch64
           path: release-artifacts
-
       - name: download macos x86_64
         uses: actions/download-artifact@v4
         with:
           name: Lector-TBO-macOS-x86_64
           path: release-artifacts
-
       - name: download android apk
         uses: actions/download-artifact@v4
         with:
           name: Lector-TBO-Android
           path: release-artifacts
-
       - name: create release
         uses: softprops/action-gh-release@v2
         with:
