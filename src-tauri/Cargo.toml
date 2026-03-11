@@ -31,6 +31,9 @@ rayon = "1"
 image = { version = "0.24", features = ["jpeg"] }
 lopdf = "0.31"
 
+[target.'cfg(not(target_os = "android"))'.dependencies]
+unrar = "0.5"
+
 [features]
 custom-protocol = ["tauri/custom-protocol"]
 default = ["custom-protocol"]

@@ -279,75 +279,214 @@ fn zip_extract_page(path: &Path, files: &[String], idx: usize) -> Result<Vec<u8>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  CBR (RAR) archive helpers — with ZIP-first fallback for misnamed files
+//  CBR (RAR) archive helpers
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// Strategy (in order of attempt):
+//   1. Magic-byte sniff: if file starts with PK (ZIP magic), treat as ZIP
+//      (many CBR files are just ZIPs with a .cbr extension)
+//   2. [desktop only] unrar crate: pure-Rust wrapper around official unrar C++
+//      library — handles RAR4 AND RAR5 without any external tools
+//   3. External tools: bsdtar (RAR4 only on macOS), unrar CLI, unar CLI
+//
+// RAR5 (WinRAR 5+) is the most common reason covers fail — bsdtar does not
+// support RAR5. The unrar crate fixes this on desktop/macOS.
 
-/// Try each command in sequence; return the first that starts AND exits 0.
+fn is_zip_magic(path: &Path) -> bool {
+    if let Ok(mut f) = fs::File::open(path) {
+        use std::io::Read;
+        let mut buf = [0u8; 4];
+        if f.read_exact(&mut buf).is_ok() {
+            return buf[0] == b'P' && buf[1] == b'K';
+        }
+    }
+    false
+}
+
+fn is_rar_magic(path: &Path) -> bool {
+    if let Ok(mut f) = fs::File::open(path) {
+        use std::io::Read;
+        let mut buf = [0u8; 7];
+        if f.read_exact(&mut buf).is_ok() {
+            // RAR4: 52 61 72 21 1A 07 00
+            // RAR5: 52 61 72 21 1A 07 01 00
+            return buf[0] == 0x52 && buf[1] == 0x61 && buf[2] == 0x72 &&
+                   buf[3] == 0x21 && buf[4] == 0x1A && buf[5] == 0x07;
+        }
+    }
+    false
+}
+
+/// [desktop only] List images inside a RAR archive using the unrar crate.
+/// Supports both RAR4 and RAR5 without external tools.
+#[cfg(not(target_os = "android"))]
+fn unrar_crate_image_list(path: &Path) -> Result<Vec<String>, String> {
+    let archive = unrar::Archive::new(path)
+        .open_for_listing()
+        .map_err(|e| format!("unrar open: {}", e))?;
+    let mut names: Vec<String> = archive
+        .filter_map(|e| e.ok())
+        .map(|e| e.filename.to_string_lossy().into_owned())
+        .filter(|n| is_image(n))
+        .collect();
+    names.sort_by(|a, b| natural_sort_key(a).cmp(&natural_sort_key(b)));
+    if names.is_empty() {
+        return Err("No images found in RAR archive".to_string());
+    }
+    Ok(names)
+}
+
+/// [desktop only] Extract one page from a RAR archive using the unrar crate.
+#[cfg(not(target_os = "android"))]
+fn unrar_crate_extract_page(path: &Path, files: &[String], idx: usize) -> Result<Vec<u8>, String> {
+    if idx >= files.len() { return Err(format!("Page {} out of range", idx)); }
+    let target_name = &files[idx];
+    let archive = unrar::Archive::new(path)
+        .open_for_processing()
+        .map_err(|e| format!("unrar open: {}", e))?;
+    let mut cursor = archive;
+    loop {
+        let header = cursor.read_header().map_err(|e| format!("unrar header: {}", e))?;
+        match header {
+            None => break,
+            Some(h) => {
+                let entry_name = h.entry().filename.to_string_lossy().into_owned();
+                if &entry_name == target_name {
+                    let (data, _rest) = h.read().map_err(|e| format!("unrar read: {}", e))?;
+                    return Ok(data);
+                } else {
+                    cursor = h.skip().map_err(|e| format!("unrar skip: {}", e))?;
+                }
+            }
+        }
+    }
+    Err(format!("File not found in RAR: {}", target_name))
+}
+
+/// Try external RAR tools as last resort (handles edge cases, older macOS bsdtar for RAR4).
 fn rar_run(cmds: &[(&str, &[&str])]) -> Result<std::process::Output, String> {
-    let mut last_err = "No RAR tool found (install unar via brew/apt)".to_string();
+    let mut last_err = "No RAR tool available".to_string();
     for (bin, args) in cmds {
         match std::process::Command::new(bin).args(*args).output() {
             Ok(out) if out.status.success() => return Ok(out),
             Ok(out) => {
-                // Tool ran but failed — record error, try next tool
                 last_err = format!(
-                    "{} exited {}: {}",
-                    bin,
-                    out.status,
+                    "{} failed ({}): {}",
+                    bin, out.status,
                     String::from_utf8_lossy(&out.stderr).trim()
                 );
             }
-            Err(_) => {} // binary not on PATH, try next
+            Err(_) => {} // binary not on PATH
         }
     }
     Err(last_err)
 }
 
-fn rar_image_list(path: &Path) -> Result<Vec<String>, String> {
+fn rar_tool_image_list(path: &Path) -> Result<Vec<String>, String> {
     let p = path.to_str().unwrap_or("");
     let out = rar_run(&[
         ("bsdtar", &["-tf", p]),
-        ("lsar",   &[p]),
         ("unrar",  &["lb", p]),
+        ("unar",   &["-list", p]),
     ])?;
-    let mut names: Vec<String> = String::from_utf8_lossy(&out.stdout)
+    // Parse output: each tool uses slightly different formats.
+    // bsdtar and unrar "lb" print one path per line.
+    // unar -list prints a table; the filename is the last whitespace-separated field.
+    let raw = String::from_utf8_lossy(&out.stdout);
+    let mut names: Vec<String> = raw
         .lines()
-        .map(|l| l.trim().to_string())
-        .filter(|l| is_image(l))
+        .filter_map(|l| {
+            let trimmed = l.trim();
+            // Skip empty lines and unar header/separator lines
+            if trimmed.is_empty() || trimmed.starts_with("---") || trimmed.starts_with("Archive") {
+                return None;
+            }
+            // unar -list: last field is the filename
+            let candidate = trimmed.split_whitespace().last().unwrap_or(trimmed);
+            // Strip leading ./ if present
+            let clean = candidate.trim_start_matches("./");
+            if is_image(clean) { Some(clean.to_string()) } else { None }
+        })
         .collect();
     names.sort_by(|a, b| natural_sort_key(a).cmp(&natural_sort_key(b)));
+    if names.is_empty() {
+        return Err("No images found via external RAR tool".to_string());
+    }
     Ok(names)
 }
 
-fn rar_extract_page(path: &Path, files: &[String], idx: usize) -> Result<Vec<u8>, String> {
+fn rar_tool_extract_page(path: &Path, files: &[String], idx: usize) -> Result<Vec<u8>, String> {
     if idx >= files.len() { return Err(format!("Page {} out of range", idx)); }
     let p = path.to_str().unwrap_or("");
     let target = files[idx].as_str();
     let out = rar_run(&[
         ("bsdtar", &["-xOf", p, target]),
-        ("unar",   &["-o", "-", p, target]),
         ("unrar",  &["p", "-inul", p, target]),
     ])?;
+    if out.stdout.is_empty() {
+        return Err("RAR tool returned empty output".to_string());
+    }
     Ok(out.stdout)
 }
 
-/// CBR listing: try ZIP first (many CBR files are just renamed ZIP), then RAR.
+/// CBR listing with full fallback chain.
 fn cbr_image_list(path: &Path) -> Result<Vec<String>, String> {
-    if let Ok(list) = zip_image_list(path) {
-        if !list.is_empty() {
+    // 1. Magic-byte sniff: ZIP content in a .cbr file (very common)
+    if is_zip_magic(path) {
+        if let Ok(list) = zip_image_list(path) {
+            if !list.is_empty() { return Ok(list); }
+        }
+    }
+
+    // 2. Native RAR support (desktop: unrar crate, handles RAR4 + RAR5)
+    #[cfg(not(target_os = "android"))]
+    if is_rar_magic(path) {
+        if let Ok(list) = unrar_crate_image_list(path) {
             return Ok(list);
         }
     }
-    rar_image_list(path)
+
+    // 3. ZIP fallback even without magic match (some tools write non-standard ZIPs)
+    if let Ok(list) = zip_image_list(path) {
+        if !list.is_empty() { return Ok(list); }
+    }
+
+    // 4. External tools (last resort)
+    #[cfg(not(target_os = "android"))]
+    return rar_tool_image_list(path);
+
+    #[cfg(target_os = "android")]
+    Err("RAR format not supported on Android — convert CBR to CBZ for best compatibility".to_string())
 }
 
-/// CBR extraction: mirror the listing strategy so the same format is used.
+/// CBR extraction mirroring the listing strategy.
 fn cbr_extract_page(path: &Path, files: &[String], idx: usize) -> Result<Vec<u8>, String> {
-    // Try ZIP first — if the listing came from a ZIP-disguised CBR this will work.
+    // 1. ZIP magic
+    if is_zip_magic(path) {
+        if let Ok(bytes) = zip_extract_page(path, files, idx) {
+            return Ok(bytes);
+        }
+    }
+
+    // 2. unrar crate (desktop, RAR4 + RAR5)
+    #[cfg(not(target_os = "android"))]
+    if is_rar_magic(path) {
+        if let Ok(bytes) = unrar_crate_extract_page(path, files, idx) {
+            return Ok(bytes);
+        }
+    }
+
+    // 3. ZIP without magic match
     if let Ok(bytes) = zip_extract_page(path, files, idx) {
         return Ok(bytes);
     }
-    rar_extract_page(path, files, idx)
+
+    // 4. External tools
+    #[cfg(not(target_os = "android"))]
+    return rar_tool_extract_page(path, files, idx);
+
+    #[cfg(target_os = "android")]
+    Err("RAR format not supported on Android".to_string())
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -408,6 +547,79 @@ fn resolve_to_dict<'a>(
 fn pdf_name_eq(obj: Option<&lopdf::Object>, name: &[u8]) -> bool {
     if let Some(lopdf::Object::Name(n)) = obj { n.as_slice() == name } else { false }
 }
+/// Extract a single PDF page as image bytes (JPEG if possible, PNG fallback).
+/// For scanned comic PDFs every page IS a full-page JPEG or PNG image XObject.
+fn pdf_extract_page_bytes(path: &Path, page_idx: usize) -> Result<Vec<u8>, String> {
+    let doc = lopdf::Document::load(path)
+        .map_err(|e| format!("PDF load: {}", e))?;
+    let pages = doc.get_pages();
+    let page_num = (page_idx + 1) as u32;
+    let &page_id = pages.get(&page_num)
+        .ok_or_else(|| format!("PDF page {} not found", page_idx))?;
+
+    // Try to get the embedded image from the page (works for scanned comics)
+    if let Some(bytes) = extract_any_image_from_page(&doc, page_id) {
+        return Ok(bytes);
+    }
+
+    Err(format!("Could not extract image from PDF page {}", page_idx))
+}
+
+/// Extract any image XObject from a PDF page (JPEG, PNG/FlateDecode, or raw).
+fn extract_any_image_from_page(doc: &lopdf::Document, page_id: lopdf::ObjectId) -> Option<Vec<u8>> {
+    let page_obj  = doc.get_object(page_id).ok()?;
+    let page_dict = page_obj.as_dict().ok()?;
+    let res_obj   = page_dict.get(b"Resources").ok()?;
+    let res_dict  = resolve_to_dict(doc, res_obj)?;
+    let xobj_obj  = res_dict.get(b"XObject").ok()?;
+    let xobj_dict = resolve_to_dict(doc, xobj_obj)?;
+
+    for (_, obj) in xobj_dict.iter() {
+        let xobj_id = if let lopdf::Object::Reference(id) = obj { *id } else { continue };
+        if let Ok(lopdf::Object::Stream(stream)) = doc.get_object(xobj_id) {
+            if !pdf_name_eq(stream.dict.get(b"Subtype").ok(), b"Image") { continue; }
+
+            let filter = stream.dict.get(b"Filter").ok();
+            if pdf_name_eq(filter, b"DCTDecode") {
+                // JPEG — return raw JPEG bytes directly
+                return Some(stream.content.clone());
+            }
+            if pdf_name_eq(filter, b"FlateDecode") {
+                // PNG/deflate — decompress and wrap as PNG
+                if let Ok(decompressed) = stream.decompressed_content() {
+                    let width  = stream.dict.get(b"Width").ok()
+                        .and_then(|o| o.as_i64().ok()).unwrap_or(0) as u32;
+                    let height = stream.dict.get(b"Height").ok()
+                        .and_then(|o| o.as_i64().ok()).unwrap_or(0) as u32;
+                    let bits = stream.dict.get(b"BitsPerComponent").ok()
+                        .and_then(|o| o.as_i64().ok()).unwrap_or(8) as u32;
+                    if width > 0 && height > 0 && bits == 8 {
+                        let bytes_per_pixel = (decompressed.len() as u32) / (width * height);
+                        let color_type = if bytes_per_pixel >= 3 {
+                            image::ColorType::Rgb8
+                        } else {
+                            image::ColorType::L8
+                        };
+                        let mut buf = std::io::Cursor::new(Vec::new());
+                        if image::codecs::png::PngEncoder::new(&mut buf)
+                            .encode(&decompressed, width, height, color_type)
+                            .is_ok()
+                        {
+                            return Some(buf.into_inner());
+                        }
+                    }
+                }
+            }
+            // Fallback: return raw stream content and hope the frontend handles it
+            if !stream.content.is_empty() {
+                return Some(stream.content.clone());
+            }
+        }
+    }
+    None
+}
+
+
 
 /// Generate a placeholder cover for PDFs (tries JPEG extraction first).
 fn pdf_placeholder_cover(cache_path: &Path, file_path: &str) -> Result<(), String> {
@@ -451,7 +663,7 @@ fn extract_page_bytes(path: &Path, files: &[String], idx: usize) -> Result<Vec<u
     match path.extension().and_then(|e| e.to_str()).map(str::to_lowercase).as_deref() {
         Some("cbz") => zip_extract_page(path, files, idx),
         Some("cbr") => cbr_extract_page(path, files, idx),
-        Some("pdf") => fs::read(path).map_err(|e| e.to_string()), // full PDF bytes
+        Some("pdf") => pdf_extract_page_bytes(path, idx),
         _ => Err("Unsupported format".to_string()),
     }
 }
