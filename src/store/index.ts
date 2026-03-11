@@ -55,7 +55,9 @@ interface AppStore {
 
   updateComic:      (comic: Comic) => Promise<void>;
   toggleRead:       (comicId: string) => Promise<void>;
-  deleteComic:      (comicId: string) => Promise<void>;
+  deleteComic:          (comicId: string)  => Promise<void>;
+  deleteFolderComics:   (folderDir: string) => Promise<void>;
+  clearMissingComics:   ()                  => Promise<void>;
   updateProgress:   (comicId: string, page: number) => Promise<void>;
   setReaderLayout:  (l: ReaderLayout) => void;
 
@@ -242,6 +244,20 @@ export const useStore = create<AppStore>((set, get) => ({
     set({ comics, filteredComics: applyFiltersAndSort(comics, searchQuery, sortField, sortAsc, filterStatus), view: "library", selectedComic: null });
   },
 
+  deleteFolderComics: async (folderDir) => {
+    await invoke("delete_folder_comics", { folderPath: folderDir });
+    const comics = get().comics.filter((c) => !c.file_path.startsWith(folderDir));
+    const { searchQuery, sortField, sortAsc, filterStatus } = get();
+    set({ comics, filteredComics: applyFiltersAndSort(comics, searchQuery, sortField, sortAsc, filterStatus), selectedComic: null });
+  },
+
+  clearMissingComics: async () => {
+    await invoke("clear_missing_comics");
+    const comics = get().comics.filter((c) => !c.missing);
+    const { searchQuery, sortField, sortAsc, filterStatus } = get();
+    set({ comics, filteredComics: applyFiltersAndSort(comics, searchQuery, sortField, sortAsc, filterStatus), selectedComic: null });
+  },
+
   updateProgress: async (comicId, currentPage) => {
     await invoke("update_reading_progress", { comicId, currentPage });
     const comics = get().comics.map((c) => c.id === comicId ? { ...c, current_page: currentPage } : c);
@@ -265,5 +281,6 @@ export const useStore = create<AppStore>((set, get) => ({
   removeSource: async (id) => {
     await invoke("remove_source", { sourceId: id });
     await get().loadSources();
+    await get().loadLibrary();
   },
 }));

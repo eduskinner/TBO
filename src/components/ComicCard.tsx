@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { loadCover, placeholderColor } from "../store/coverQueue";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Trash2 } from "lucide-react";
+import { useStore } from "../store";
 import type { Comic } from "../types";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -16,36 +17,29 @@ interface Props {
 
 export default function ComicCard({ comic, onClick }: Props) {
   const [cover,   setCover]   = useState<string | null>(null);
-  const [visible, setVisible] = useState(false);   // has entered viewport
-  const [loaded,  setLoaded]  = useState(false);   // img onLoad fired
+  const [visible, setVisible] = useState(false);
+  const [loaded,  setLoaded]  = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
+  const deleteComic = useStore((s) => s.deleteComic);
 
-  // Trigger load when card scrolls into view (200px lookahead)
+  // Intersection observer — load cover when entering viewport
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
-    if (visible) return; // already triggered
-
+    if (!el || visible) return;
     const obs = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          obs.disconnect();
-          setVisible(true);
-        }
-      },
+      ([entry]) => { if (entry.isIntersecting) { obs.disconnect(); setVisible(true); } },
       { rootMargin: "300px" }
     );
     obs.observe(el);
     return () => obs.disconnect();
   }, [visible]);
 
-  // Load cover once visible
   useEffect(() => {
     if (!visible) return;
     let cancelled = false;
     loadCover(comic.id, comic.file_path)
       .then((url) => { if (!cancelled) setCover(url); })
-      .catch(() => { /* leave null → shows fallback */ });
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [visible, comic.id, comic.file_path]);
 
@@ -56,23 +50,35 @@ export default function ComicCard({ comic, onClick }: Props) {
 
   const placeholder = placeholderColor(comic.id);
 
+  const onDelete = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteComic(comic.id);
+  }, [comic.id, deleteComic]);
+
+  const isMissing = comic.missing;
+
   return (
     <button
       ref={ref}
       onClick={onClick}
       className="group flex flex-col text-left focus:outline-none"
-      style={{ background: "transparent" }}
+      style={{ background: "transparent", opacity: isMissing ? 0.45 : 1 }}
     >
       {/* Cover */}
       <div
         className="relative w-full overflow-hidden"
-        style={{
-          aspectRatio: "2/3",
-          borderRadius: 8,
-          background: placeholder,     // instant placeholder — no spinner needed
-        }}
+        style={{ aspectRatio: "2/3", borderRadius: 8, background: placeholder }}
       >
-        {/* Real cover — fades in over the placeholder */}
+        {/* Missing: red diagonal stripe overlay */}
+        {isMissing && (
+          <div style={{
+            position: "absolute", inset: 0, zIndex: 4, borderRadius: 8,
+            background: "repeating-linear-gradient(-45deg,rgba(239,68,68,0.18) 0px,rgba(239,68,68,0.18) 4px,transparent 4px,transparent 12px)",
+            pointerEvents: "none",
+          }} />
+        )}
+
+        {/* Real cover */}
         {cover && (
           <img
             src={cover}
@@ -82,18 +88,15 @@ export default function ComicCard({ comic, onClick }: Props) {
             style={{
               transition: "opacity 0.25s ease, transform 0.3s ease",
               opacity: loaded ? 1 : 0,
-              // Scale up from 140px stored size; CSS handles the visual quality
               imageRendering: "auto",
             }}
             draggable={false}
           />
         )}
 
-        {/* Fallback icon for totally failed covers */}
+        {/* Fallback icon */}
         {visible && !cover && (
-          <div
-            className="absolute inset-0 flex flex-col items-center justify-center gap-1 opacity-40"
-          >
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 opacity-40">
             <BookOpen size={20} style={{ color: "var(--text3)" }} />
           </div>
         )}
@@ -110,18 +113,15 @@ export default function ComicCard({ comic, onClick }: Props) {
 
         {/* Reading progress bar */}
         {comic.read_status === "reading" && comic.page_count > 0 && (
-          <div
-            className="absolute bottom-0 left-0 right-0"
-            style={{ height: 3, background: "rgba(0,0,0,0.4)" }}
-          >
-            <div style={{ height:"100%", width:`${progress}%`, background:"var(--accent)" }} />
+          <div className="absolute bottom-0 left-0 right-0" style={{ height: 3, background: "rgba(0,0,0,0.4)" }}>
+            <div style={{ height: "100%", width: `${progress}%`, background: "var(--accent)" }} />
           </div>
         )}
 
-        {/* Hover overlay */}
+        {/* Hover overlay with page count + trash */}
         <div
           className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.75) 0%, transparent 55%)" }}
+          style={{ background: "linear-gradient(to top, rgba(0,0,0,0.82) 0%, transparent 55%)" }}
         >
           {comic.page_count > 0 && (
             <span
@@ -131,12 +131,45 @@ export default function ComicCard({ comic, onClick }: Props) {
               {comic.page_count}p
             </span>
           )}
+
+          {/* ── Trash button — removes from library, not from disk ── */}
+          <button
+            onClick={onDelete}
+            title="Remove from library"
+            style={{
+              position: "absolute", top: 6, left: 6,
+              width: 26, height: 26,
+              background: "rgba(0,0,0,0.65)",
+              border: "1px solid rgba(255,255,255,0.12)",
+              borderRadius: 6,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              cursor: "pointer", color: "#f87171",
+              backdropFilter: "blur(4px)",
+              zIndex: 10,
+            }}
+          >
+            <Trash2 size={12} />
+          </button>
+
+          {/* Missing badge */}
+          {isMissing && (
+            <span style={{
+              position: "absolute", top: 6, right: 6,
+              background: "rgba(239,68,68,0.85)", color: "#fff",
+              fontSize: 9, fontWeight: 700, letterSpacing: 0.5,
+              padding: "2px 5px", borderRadius: 4,
+              fontFamily: "'IBM Plex Mono',monospace",
+              zIndex: 5,
+            }}>
+              MISSING
+            </span>
+          )}
         </div>
       </div>
 
       {/* Label */}
       <div className="px-0.5 pt-1.5 pb-1">
-        <p className="truncate" style={{ fontSize: 11, fontWeight: 500, color: "var(--text)", lineHeight: 1.3 }}>
+        <p className="truncate" style={{ fontSize: 11, fontWeight: 500, color: isMissing ? "var(--text3)" : "var(--text)", lineHeight: 1.3 }}>
           {comic.title || comic.file_name}
         </p>
         {comic.series && (

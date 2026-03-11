@@ -53,8 +53,10 @@ export default function Library() {
     comics, loading, scanning, scanResult, scanProgress,
     searchQuery, sortField, sortAsc, filterStatus,
     setSearch, setSort, toggleSortDir, setFilterStatus,
-    openReader, rescanSources, openAddFolder,
+    openReader, rescanSources, openAddFolder, clearMissingComics,
   } = useStore();
+
+  const missingTotal = comics.filter(c => c.missing).length;
 
   // Which folder is open (null = top-level folders view)
   const [activeDir, setActiveDir] = useState<string | null>(null);
@@ -210,9 +212,31 @@ export default function Library() {
       {scanResult && !scanning && (
         <div className="flex items-center gap-3 px-6 py-2 flex-shrink-0"
           style={{ background: "rgba(232,168,48,0.08)", borderBottom: "1px solid var(--border)", fontSize: 12, color: "var(--text2)" }}>
-          ✓ <strong style={{ color: "var(--text)" }}>{scanResult.added}</strong> new comics added,{" "}
-          <strong style={{ color: "var(--text)" }}>{scanResult.skipped}</strong> already in library
+          ✓ <strong style={{ color: "var(--text)" }}>{scanResult.added}</strong> new,{" "}
+          <strong style={{ color: "var(--text)" }}>{scanResult.skipped}</strong> unchanged
           {scanResult.errors.length > 0 && <span style={{ color: "#f87171" }}> · {scanResult.errors.length} errors</span>}
+        </div>
+      )}
+
+      {/* Missing files banner — shown when scanned files no longer exist on disk */}
+      {missingTotal > 0 && !scanning && (
+        <div className="flex items-center gap-3 px-6 py-2 flex-shrink-0"
+          style={{ background: "rgba(239,68,68,0.08)", borderBottom: "1px solid rgba(239,68,68,0.2)", fontSize: 12 }}>
+          <span style={{ color: "#f87171" }}>
+            ⚠ <strong>{missingTotal}</strong> {missingTotal === 1 ? "comic" : "comics"} no longer found on disk
+          </span>
+          <div style={{ flex: 1 }} />
+          <button
+            onClick={clearMissingComics}
+            style={{
+              background: "rgba(239,68,68,0.15)", color: "#f87171",
+              border: "1px solid rgba(239,68,68,0.3)",
+              borderRadius: 6, padding: "3px 12px", fontSize: 11,
+              fontWeight: 600, cursor: "pointer",
+            }}
+          >
+            Remove {missingTotal === 1 ? "it" : "them"} from library
+          </button>
         </div>
       )}
 
@@ -283,6 +307,7 @@ export default function Library() {
                 <FolderCard
                   key={group.dir}
                   name={group.name}
+                  dir={group.dir}
                   comics={group.comics}
                   onClick={() => {
                     setActiveDir(group.dir);

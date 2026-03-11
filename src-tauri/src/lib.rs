@@ -565,7 +565,11 @@ fn pdf_extract_page_bytes(path: &Path, page_idx: usize) -> Result<Vec<u8>, Strin
     Err(format!("Could not extract image from PDF page {}", page_idx))
 }
 
-/// Extract any image XObject from a PDF page (JPEG, PNG/FlateDecode, or raw).
+/// Extract any image XObject from a PDF page.
+///
+/// IMPORTANT: PDFs often contain multiple image XObjects per page — watermarks,
+/// small thumbnails, logos in the margins. We must select the LARGEST image
+/// (by pixel area) to get the actual comic page content, not a decoration.
 fn extract_any_image_from_page(doc: &lopdf::Document, page_id: lopdf::ObjectId) -> Option<Vec<u8>> {
     let page_obj  = doc.get_object(page_id).ok()?;
     let page_dict = page_obj.as_dict().ok()?;
@@ -574,49 +578,65 @@ fn extract_any_image_from_page(doc: &lopdf::Document, page_id: lopdf::ObjectId) 
     let xobj_obj  = res_dict.get(b"XObject").ok()?;
     let xobj_dict = resolve_to_dict(doc, xobj_obj)?;
 
+    // Collect all candidate images with their pixel area so we can pick the largest
+    struct Candidate { area: u64, bytes: Vec<u8> }
+    let mut best: Option<Candidate> = None;
+
     for (_, obj) in xobj_dict.iter() {
         let xobj_id = if let lopdf::Object::Reference(id) = obj { *id } else { continue };
-        if let Ok(lopdf::Object::Stream(stream)) = doc.get_object(xobj_id) {
-            if !pdf_name_eq(stream.dict.get(b"Subtype").ok(), b"Image") { continue; }
+        let stream = match doc.get_object(xobj_id) {
+            Ok(lopdf::Object::Stream(s)) => s,
+            _ => continue,
+        };
+        if !pdf_name_eq(stream.dict.get(b"Subtype").ok(), b"Image") { continue; }
 
-            let filter = stream.dict.get(b"Filter").ok();
-            if pdf_name_eq(filter, b"DCTDecode") {
-                // JPEG — return raw JPEG bytes directly
-                return Some(stream.content.clone());
+        let width  = stream.dict.get(b"Width").ok()
+            .and_then(|o| o.as_i64().ok()).unwrap_or(0) as u64;
+        let height = stream.dict.get(b"Height").ok()
+            .and_then(|o| o.as_i64().ok()).unwrap_or(0) as u64;
+        let area = width * height;
+        if area == 0 { continue; }
+
+        // Skip if we already have a larger image
+        if let Some(ref b) = best { if b.area >= area { continue; } }
+
+        let filter = stream.dict.get(b"Filter").ok();
+
+        if pdf_name_eq(filter, b"DCTDecode") {
+            // JPEG — raw stream bytes are valid JPEG
+            if !stream.content.is_empty() {
+                best = Some(Candidate { area, bytes: stream.content.clone() });
             }
-            if pdf_name_eq(filter, b"FlateDecode") {
-                // PNG/deflate — decompress and wrap as PNG
-                if let Ok(decompressed) = stream.decompressed_content() {
-                    let width  = stream.dict.get(b"Width").ok()
-                        .and_then(|o| o.as_i64().ok()).unwrap_or(0) as u32;
-                    let height = stream.dict.get(b"Height").ok()
-                        .and_then(|o| o.as_i64().ok()).unwrap_or(0) as u32;
-                    let bits = stream.dict.get(b"BitsPerComponent").ok()
-                        .and_then(|o| o.as_i64().ok()).unwrap_or(8) as u32;
-                    if width > 0 && height > 0 && bits == 8 {
-                        let bytes_per_pixel = (decompressed.len() as u32) / (width * height);
-                        let color_type = if bytes_per_pixel >= 3 {
-                            image::ColorType::Rgb8
-                        } else {
-                            image::ColorType::L8
-                        };
-                        let mut buf = std::io::Cursor::new(Vec::new());
-                        if image::codecs::png::PngEncoder::new(&mut buf)
-                            .encode(&decompressed, width, height, color_type)
-                            .is_ok()
-                        {
-                            return Some(buf.into_inner());
-                        }
+        } else if pdf_name_eq(filter, b"FlateDecode") {
+            // Deflate-compressed raw pixels — decompress and re-encode as PNG
+            if let Ok(decompressed) = stream.decompressed_content() {
+                let w = width as u32;
+                let h = height as u32;
+                let bits = stream.dict.get(b"BitsPerComponent").ok()
+                    .and_then(|o| o.as_i64().ok()).unwrap_or(8) as u32;
+                if w > 0 && h > 0 && bits == 8 {
+                    let bpp = (decompressed.len() as u32).saturating_div(w * h);
+                    let color_type = if bpp >= 3 { image::ColorType::Rgb8 } else { image::ColorType::L8 };
+                    let mut buf = std::io::Cursor::new(Vec::new());
+                    if image::codecs::png::PngEncoder::new(&mut buf)
+                        .encode(&decompressed, w, h, color_type).is_ok()
+                    {
+                        best = Some(Candidate { area, bytes: buf.into_inner() });
                     }
                 }
             }
-            // Fallback: return raw stream content and hope the frontend handles it
+        } else if pdf_name_eq(filter, b"JPXDecode") {
+            // JPEG 2000 — browsers can't display this natively, but store as fallback
             if !stream.content.is_empty() {
-                return Some(stream.content.clone());
+                best = Some(Candidate { area, bytes: stream.content.clone() });
             }
+        } else if stream.content.len() > 1024 {
+            // Unknown filter but non-trivial content — store as fallback
+            best = Some(Candidate { area, bytes: stream.content.clone() });
         }
     }
-    None
+
+    best.map(|b| b.bytes)
 }
 
 

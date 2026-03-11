@@ -7,16 +7,20 @@
  */
 import { useState, useEffect } from "react";
 import { loadCover, placeholderColor } from "../store/coverQueue";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen, Trash2 } from "lucide-react";
+import { useStore } from "../store";
 import type { Comic } from "../types";
 
 interface Props {
-  name:    string;
-  comics:  Comic[];
-  onClick: () => void;
+  name:     string;
+  dir:      string;
+  comics:   Comic[];
+  onClick:  () => void;
 }
 
-export default function FolderCard({ name, comics, onClick }: Props) {
+export default function FolderCard({ name, dir, comics, onClick }: Props) {
+  const deleteFolderComics = useStore((s) => s.deleteFolderComics);
+  const missingCount = comics.filter(c => c.missing).length;
   const read    = comics.filter(c => c.read_status === "read").length;
   const reading = comics.filter(c => c.read_status === "reading").length;
   const unread  = comics.length - read - reading;
@@ -65,6 +69,38 @@ export default function FolderCard({ name, comics, onClick }: Props) {
         }}>
           {comics.length}
         </div>
+
+        {/* Trash button — removes all folder comics from library, not from disk */}
+        <button
+          onClick={e => { e.stopPropagation(); deleteFolderComics(dir); }}
+          title="Remove entire folder from library"
+          className="opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+          style={{
+            position: "absolute", top: 8, left: 8,
+            width: 28, height: 28,
+            background: "rgba(0,0,0,0.65)",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 7,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer", color: "#f87171",
+            backdropFilter: "blur(4px)",
+            zIndex: 10,
+          }}
+        >
+          <Trash2 size={13} />
+        </button>
+
+        {/* Missing files badge */}
+        {missingCount > 0 && (
+          <div style={{
+            position: "absolute", bottom: 8, left: 8,
+            background: "rgba(239,68,68,0.85)", color: "#fff",
+            fontFamily: "'IBM Plex Mono',monospace", fontSize: 9, fontWeight: 700,
+            padding: "2px 7px", borderRadius: 20, letterSpacing: 0.5,
+          }}>
+            {missingCount} missing
+          </div>
+        )}
       </div>
 
       {/* Info */}

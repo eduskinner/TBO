@@ -6,6 +6,8 @@ import Library from "./components/Library";
 import ComicDetail from "./components/ComicDetail";
 import Settings from "./components/Settings";
 import ReaderWindow from "./components/ReaderWindow";
+import MobileApp from "./mobile/MobileApp";
+import { isAndroid } from "./mobile/usePlatform";
 
 // ── Detect which Tauri window we are ─────────────────────────────────────────
 // The reader window loads index.html#reader; the main window loads index.html
@@ -135,9 +137,10 @@ function MainApp() {
 // ── Root ──────────────────────────────────────────────────────────────────────
 export default function App() {
   const reader = isReaderWindow();
+  const mobile = isAndroid();
   return (
     <ErrorBoundary>
-      {reader ? <ReaderWindow /> : <MainApp />}
+      {reader ? <ReaderWindow /> : mobile ? <MobileApp /> : <MainApp />}
     </ErrorBoundary>
   );
 }

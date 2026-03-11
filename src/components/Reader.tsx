@@ -560,8 +560,14 @@ export default function Reader({ comic, onClose }: Props) {
 
         <div
           ref={pageAreaRef}
-          className="relative flex items-center justify-center w-full h-full"
-          style={{ overflow:"hidden", cursor: zoom>1 ? "grab" : "default" }}
+          className="relative w-full h-full"
+          style={{
+            overflow: "hidden",
+            cursor: zoom > 1 ? "grab" : "default",
+            // overflow:hidden here is the real clip boundary — avoids the WebKit
+            // bug where overflow:hidden on a flex container doesn't clip
+            // CSS-transformed children on the Y axis.
+          }}
           onMouseDown={onPanStart}
           onClick={e => {
             if (showSettings) return;
@@ -578,24 +584,38 @@ export default function Reader({ comic, onClose }: Props) {
             if (x < r.width / 2) goBack(); else goForward();
           }}
         >
-          {!src ? <Spinner /> : (
-            <img
-              ref={imgRef}
-              key={`${effectivePage}-${layout}`}
-              src={src}
-              alt={`Page ${effectivePage+1}`}
-              onLoad={onImgLoad}
-              className="fade-in"
-              draggable={false}
-              style={{
-                maxWidth: "100%",
-                maxHeight: "100%",
-                objectFit: "contain",
-                display: "block",
-                ...imgTransform,
-              }}
-            />
-          )}
+          {/* Transform wrapper: the transform lives here, not on the img.
+              This div fills the full container, is flex-centered, and carries
+              the zoom/pan/guided transform. The img inside is always sized
+              to fit the container at zoom=1; visual zoom comes from this div. */}
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              ...imgTransform,
+            }}
+          >
+            {!src ? <Spinner /> : (
+              <img
+                ref={imgRef}
+                key={`${effectivePage}-${layout}`}
+                src={src}
+                alt={`Page ${effectivePage+1}`}
+                onLoad={onImgLoad}
+                className="fade-in"
+                draggable={false}
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "100%",
+                  display: "block",
+                  pointerEvents: "none",
+                }}
+              />
+            )}
+          </div>
         </div>
 
         {zoom <= 1 && !isGuided && (
