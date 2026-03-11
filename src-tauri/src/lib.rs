@@ -1381,6 +1381,7 @@ fn clear_missing_comics(state: State<AppState>) -> Result<(), String> {
     Ok(())
 }
 
+/// Fallback data dir used only when the Tauri path API is unavailable.
 fn dirs_data() -> PathBuf {
     std::env::var("HOME")
         .map(PathBuf::from)
@@ -1392,19 +1393,24 @@ fn dirs_data() -> PathBuf {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let data_dir = dirs_data();
-    let _ = fs::create_dir_all(&data_dir);
-    let db_path  = data_dir.join("panels.db");
-    let conn     = Connection::open(&db_path).expect("Failed to open database");
-    init_db(&conn).expect("Failed to initialize database");
-
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
-        .manage(AppState {
-            db: Mutex::new(conn),
-            reader_comic_id: Mutex::new(String::new()),
+        .setup(|app| {
+            // Use the Tauri path API so we get the correct platform-specific
+            // data directory on every OS — especially Android, where $HOME is
+            // either unset or points to a path the app cannot write to.
+            let data_dir = app.path().app_data_dir()?;
+            fs::create_dir_all(&data_dir)?;
+            let db_path = data_dir.join("panels.db");
+            let conn    = Connection::open(&db_path)?;
+            init_db(&conn)?;
+            app.manage(AppState {
+                db: Mutex::new(conn),
+                reader_comic_id: Mutex::new(String::new()),
+            });
+            Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_library, scan_folder, rescan_sources, update_page_count,
