@@ -1,9 +1,14 @@
 name: Build and Release
+
 on:
   push:
     branches:
       - main
   workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-macos:
     runs-on: macos-latest
@@ -12,12 +17,10 @@ jobs:
         architecture: [x86_64, aarch64]
     steps:
       - uses: actions/checkout@v4
-      - name: setup node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.architecture == 'x86_64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}
       - name: install frontend dependencies
@@ -26,30 +29,26 @@ jobs:
         run: npm run tauri build -- --target ${{ matrix.architecture == 'x86_64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}
         env:
           APPLE_SIGNING_IDENTITY: "-"
-      - name: upload macos dmg
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: Lector-TBO-macOS-${{ matrix.architecture }}
           path: src-tauri/target/${{ matrix.architecture == 'x86_64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}/release/bundle/dmg/*.dmg
+
   build-android:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: setup node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
-      - name: setup java
-        uses: actions/setup-java@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: zulu
           java-version: '17'
-      - name: setup android sdk
-        uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v3
       - name: install android ndk
         run: echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "ndk;27.2.12479018"
       - name: set ndk environment
@@ -65,34 +64,30 @@ jobs:
           fi
       - name: build android apk
         run: npm run tauri android build -- --apk --target aarch64 --debug
-      - name: upload android apk
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: Lector-TBO-Android
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+
   create-release:
     needs: [build-macos, build-android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - name: download macos aarch64
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: Lector-TBO-macOS-aarch64
           path: release-artifacts
-      - name: download macos x86_64
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: Lector-TBO-macOS-x86_64
           path: release-artifacts
-      - name: download android apk
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: Lector-TBO-Android
           path: release-artifacts
-      - name: create release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
           name: Lector TBO - Latest Build
