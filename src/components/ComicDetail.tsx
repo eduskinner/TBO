@@ -5,7 +5,7 @@ import { useStore } from "../store";
 import type { Comic, ReadStatus } from "../types";
 
 export default function ComicDetail() {
-  const { selectedComic, goLibrary, openReader, updateComic, toggleRead, deleteComic } = useStore();
+  const { selectedComic, goLibrary, openReader, updateComic, deleteComic } = useStore();
   const [form, setForm] = useState<Comic | null>(null);
   const [cover, setCover] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
