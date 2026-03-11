@@ -33,7 +33,7 @@ jobs:
         run: |
           cd .github/workflows
           for f in *.yml; do
-            [ "$f" != "build.yml" ] && [ "$f" != "apply-all-fixes.yml" ] && echo "Deleting $f" && rm -f "$f"
+            [ "$f" != "build.yml" ] && [ "$f" != "apply-all-fixes.yml" ] && echo "Deleting $f" && rm -f "$f" || true
           done
 
       - name: commit
