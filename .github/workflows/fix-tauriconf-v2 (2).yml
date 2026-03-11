@@ -1,0 +1,31 @@
+name: Fix tauri.conf.json
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: write tauri.conf.json
+        run: echo 'ewogICJwcm9kdWN0TmFtZSI6ICJMZWN0b3IgVEJPIiwKICAidmVyc2lvbiI6ICIwLjEuMCIsCiAgImlkZW50aWZpZXIiOiAiY29tLmxlY3RvcnRiby5hcHAiLAogICJidWlsZCI6IHsKICAgICJiZWZvcmVEZXZDb21tYW5kIjogIm5wbSBydW4gZGV2IiwKICAgICJiZWZvcmVCdWlsZENvbW1hbmQiOiAibnBtIHJ1biBidWlsZCIsCiAgICAiZGV2VXJsIjogImh0dHA6Ly9sb2NhbGhvc3Q6MTQyMCIsCiAgICAiZnJvbnRlbmREaXN0IjogIi4uL2Rpc3QiCiAgfSwKICAiYXBwIjogewogICAgIndpdGhHbG9iYWxUYXVyaSI6IGZhbHNlLAogICAgIndpbmRvd3MiOiBbCiAgICAgIHsKICAgICAgICAiZnVsbHNjcmVlbiI6IGZhbHNlLAogICAgICAgICJyZXNpemFibGUiOiB0cnVlLAogICAgICAgICJ0aXRsZSI6ICJMZWN0b3IgVEJPIiwKICAgICAgICAid2lkdGgiOiAxNDAwLAogICAgICAgICJoZWlnaHQiOiA5MDAsCiAgICAgICAgIm1pbldpZHRoIjogOTAwLAogICAgICAgICJtaW5IZWlnaHQiOiA2MDAKICAgICAgfQogICAgXSwKICAgICJzZWN1cml0eSI6IHsKICAgICAgImNzcCI6IG51bGwKICAgIH0KICB9LAogICJidW5kbGUiOiB7CiAgICAiYWN0aXZlIjogdHJ1ZSwKICAgICJ0YXJnZXRzIjogImFsbCIsCiAgICAiaWNvbiI6IFsKICAgICAgImljb25zLzMyeDMyLnBuZyIsCiAgICAgICJpY29ucy8xMjh4MTI4LnBuZyIsCiAgICAgICJpY29ucy8xMjh4MTI4QDJ4LnBuZyIsCiAgICAgICJpY29ucy9pY29uLmljbnMiLAogICAgICAiaWNvbnMvaWNvbi5pY28iCiAgICBdCiAgfQp9Cg==' | base64 --decode > src-tauri/tauri.conf.json
+
+      - name: verify
+        run: |
+          grep -q "Lector TBO" src-tauri/tauri.conf.json || (echo FAIL && exit 1)
+          grep -q "devUrl" src-tauri/tauri.conf.json || (echo FAIL && exit 1)
+          grep -q "frontendDist" src-tauri/tauri.conf.json || (echo FAIL && exit 1)
+          ! grep -q "devPath" src-tauri/tauri.conf.json || (echo FAIL && exit 1)
+          echo OK
+
+      - name: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src-tauri/tauri.conf.json
+          git diff --cached --quiet && echo "nothing to commit" || git commit -m "fix: tauri.conf.json v2"
+          git push
