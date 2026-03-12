@@ -281,16 +281,6 @@ fn zip_extract_page(path: &Path, files: &[String], idx: usize) -> Result<Vec<u8>
 // ─────────────────────────────────────────────────────────────────────────────
 //  CBR (RAR) archive helpers
 // ─────────────────────────────────────────────────────────────────────────────
-//
-// Strategy (in order of attempt):
-//   1. Magic-byte sniff: if file starts with PK (ZIP magic), treat as ZIP
-//      (many CBR files are just ZIPs with a .cbr extension)
-//   2. [desktop only] unrar crate: pure-Rust wrapper around official unrar C++
-//      library — handles RAR4 AND RAR5 without any external tools
-//   3. External tools: bsdtar (RAR4 only on macOS), unrar CLI, unar CLI
-//
-// RAR5 (WinRAR 5+) is the most common reason covers fail — bsdtar does not
-// support RAR5. The unrar crate fixes this on desktop/macOS.
 
 fn is_zip_magic(path: &Path) -> bool {
     if let Ok(mut f) = fs::File::open(path) {
@@ -308,8 +298,6 @@ fn is_rar_magic(path: &Path) -> bool {
         use std::io::Read;
         let mut buf = [0u8; 7];
         if f.read_exact(&mut buf).is_ok() {
-            // RAR4: 52 61 72 21 1A 07 00
-            // RAR5: 52 61 72 21 1A 07 01 00
             return buf[0] == 0x52 && buf[1] == 0x61 && buf[2] == 0x72 &&
                    buf[3] == 0x21 && buf[4] == 0x1A && buf[5] == 0x07;
         }
@@ -317,8 +305,6 @@ fn is_rar_magic(path: &Path) -> bool {
     false
 }
 
-/// [desktop only] List images inside a RAR archive using the unrar crate.
-/// Supports both RAR4 and RAR5 without external tools.
 #[cfg(not(target_os = "android"))]
 fn unrar_crate_image_list(path: &Path) -> Result<Vec<String>, String> {
     let archive = unrar::Archive::new(path)
@@ -336,7 +322,6 @@ fn unrar_crate_image_list(path: &Path) -> Result<Vec<String>, String> {
     Ok(names)
 }
 
-/// [desktop only] Extract one page from a RAR archive using the unrar crate.
 #[cfg(not(target_os = "android"))]
 fn unrar_crate_extract_page(path: &Path, files: &[String], idx: usize) -> Result<Vec<u8>, String> {
     if idx >= files.len() { return Err(format!("Page {} out of range", idx)); }
@@ -363,7 +348,6 @@ fn unrar_crate_extract_page(path: &Path, files: &[String], idx: usize) -> Result
     Err(format!("File not found in RAR: {}", target_name))
 }
 
-/// Try external RAR tools as last resort (handles edge cases, older macOS bsdtar for RAR4).
 fn rar_run(cmds: &[(&str, &[&str])]) -> Result<std::process::Output, String> {
     let mut last_err = "No RAR tool available".to_string();
     for (bin, args) in cmds {
@@ -376,7 +360,7 @@ fn rar_run(cmds: &[(&str, &[&str])]) -> Result<std::process::Output, String> {
                     String::from_utf8_lossy(&out.stderr).trim()
                 );
             }
-            Err(_) => {} // binary not on PATH
+            Err(_) => {}
         }
     }
     Err(last_err)
@@ -389,21 +373,15 @@ fn rar_tool_image_list(path: &Path) -> Result<Vec<String>, String> {
         ("unrar",  &["lb", p]),
         ("unar",   &["-list", p]),
     ])?;
-    // Parse output: each tool uses slightly different formats.
-    // bsdtar and unrar "lb" print one path per line.
-    // unar -list prints a table; the filename is the last whitespace-separated field.
     let raw = String::from_utf8_lossy(&out.stdout);
     let mut names: Vec<String> = raw
         .lines()
         .filter_map(|l| {
             let trimmed = l.trim();
-            // Skip empty lines and unar header/separator lines
             if trimmed.is_empty() || trimmed.starts_with("---") || trimmed.starts_with("Archive") {
                 return None;
             }
-            // unar -list: last field is the filename
             let candidate = trimmed.split_whitespace().last().unwrap_or(trimmed);
-            // Strip leading ./ if present
             let clean = candidate.trim_start_matches("./");
             if is_image(clean) { Some(clean.to_string()) } else { None }
         })
@@ -429,16 +407,13 @@ fn rar_tool_extract_page(path: &Path, files: &[String], idx: usize) -> Result<Ve
     Ok(out.stdout)
 }
 
-/// CBR listing with full fallback chain.
 fn cbr_image_list(path: &Path) -> Result<Vec<String>, String> {
-    // 1. Magic-byte sniff: ZIP content in a .cbr file (very common)
     if is_zip_magic(path) {
         if let Ok(list) = zip_image_list(path) {
             if !list.is_empty() { return Ok(list); }
         }
     }
 
-    // 2. Native RAR support (desktop: unrar crate, handles RAR4 + RAR5)
     #[cfg(not(target_os = "android"))]
     if is_rar_magic(path) {
         if let Ok(list) = unrar_crate_image_list(path) {
@@ -446,12 +421,10 @@ fn cbr_image_list(path: &Path) -> Result<Vec<String>, String> {
         }
     }
 
-    // 3. ZIP fallback even without magic match (some tools write non-standard ZIPs)
     if let Ok(list) = zip_image_list(path) {
         if !list.is_empty() { return Ok(list); }
     }
 
-    // 4. External tools (last resort)
     #[cfg(not(target_os = "android"))]
     return rar_tool_image_list(path);
 
@@ -459,16 +432,13 @@ fn cbr_image_list(path: &Path) -> Result<Vec<String>, String> {
     Err("RAR format not supported on Android — convert CBR to CBZ for best compatibility".to_string())
 }
 
-/// CBR extraction mirroring the listing strategy.
 fn cbr_extract_page(path: &Path, files: &[String], idx: usize) -> Result<Vec<u8>, String> {
-    // 1. ZIP magic
     if is_zip_magic(path) {
         if let Ok(bytes) = zip_extract_page(path, files, idx) {
             return Ok(bytes);
         }
     }
 
-    // 2. unrar crate (desktop, RAR4 + RAR5)
     #[cfg(not(target_os = "android"))]
     if is_rar_magic(path) {
         if let Ok(bytes) = unrar_crate_extract_page(path, files, idx) {
@@ -476,12 +446,10 @@ fn cbr_extract_page(path: &Path, files: &[String], idx: usize) -> Result<Vec<u8>
         }
     }
 
-    // 3. ZIP without magic match
     if let Ok(bytes) = zip_extract_page(path, files, idx) {
         return Ok(bytes);
     }
 
-    // 4. External tools
     #[cfg(not(target_os = "android"))]
     return rar_tool_extract_page(path, files, idx);
 
@@ -490,7 +458,7 @@ fn cbr_extract_page(path: &Path, files: &[String], idx: usize) -> Result<Vec<u8>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  PDF helpers (pure Rust via lopdf)
+//  PDF helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn pdf_page_list(path: &Path) -> Result<Vec<String>, String> {
@@ -500,8 +468,6 @@ fn pdf_page_list(path: &Path) -> Result<Vec<String>, String> {
     Ok((0..count).map(|i| format!("pdf_page_{}", i)).collect())
 }
 
-/// Attempt to pull the first DCTDecode (JPEG) image XObject out of a PDF page.
-/// Works for scanned-comic PDFs; returns None for vector/mixed PDFs.
 fn pdf_extract_jpeg(path: &Path, page_idx: usize) -> Option<Vec<u8>> {
     let doc = lopdf::Document::load(path).ok()?;
     let pages = doc.get_pages();
@@ -513,16 +479,13 @@ fn pdf_extract_jpeg(path: &Path, page_idx: usize) -> Option<Vec<u8>> {
 fn extract_jpeg_from_page(doc: &lopdf::Document, page_id: lopdf::ObjectId) -> Option<Vec<u8>> {
     let page_obj  = doc.get_object(page_id).ok()?;
     let page_dict = page_obj.as_dict().ok()?;
-
-    let res_obj  = page_dict.get(b"Resources").ok()?;
-    let res_dict = resolve_to_dict(doc, res_obj)?;
-
+    let res_obj   = page_dict.get(b"Resources").ok()?;
+    let res_dict  = resolve_to_dict(doc, res_obj)?;
     let xobj_obj  = res_dict.get(b"XObject").ok()?;
     let xobj_dict = resolve_to_dict(doc, xobj_obj)?;
 
     for (_, obj) in xobj_dict.iter() {
         let xobj_id = if let lopdf::Object::Reference(id) = obj { *id } else { continue };
-
         if let Ok(lopdf::Object::Stream(stream)) = doc.get_object(xobj_id) {
             if !pdf_name_eq(stream.dict.get(b"Subtype").ok(), b"Image") { continue; }
             if pdf_name_eq(stream.dict.get(b"Filter").ok(), b"DCTDecode") {
@@ -547,8 +510,7 @@ fn resolve_to_dict<'a>(
 fn pdf_name_eq(obj: Option<&lopdf::Object>, name: &[u8]) -> bool {
     if let Some(lopdf::Object::Name(n)) = obj { n.as_slice() == name } else { false }
 }
-/// Extract a single PDF page as image bytes (JPEG if possible, PNG fallback).
-/// For scanned comic PDFs every page IS a full-page JPEG or PNG image XObject.
+
 fn pdf_extract_page_bytes(path: &Path, page_idx: usize) -> Result<Vec<u8>, String> {
     let doc = lopdf::Document::load(path)
         .map_err(|e| format!("PDF load: {}", e))?;
@@ -557,7 +519,6 @@ fn pdf_extract_page_bytes(path: &Path, page_idx: usize) -> Result<Vec<u8>, Strin
     let &page_id = pages.get(&page_num)
         .ok_or_else(|| format!("PDF page {} not found", page_idx))?;
 
-    // Try to get the embedded image from the page (works for scanned comics)
     if let Some(bytes) = extract_any_image_from_page(&doc, page_id) {
         return Ok(bytes);
     }
@@ -565,11 +526,6 @@ fn pdf_extract_page_bytes(path: &Path, page_idx: usize) -> Result<Vec<u8>, Strin
     Err(format!("Could not extract image from PDF page {}", page_idx))
 }
 
-/// Extract any image XObject from a PDF page.
-///
-/// IMPORTANT: PDFs often contain multiple image XObjects per page — watermarks,
-/// small thumbnails, logos in the margins. We must select the LARGEST image
-/// (by pixel area) to get the actual comic page content, not a decoration.
 fn extract_any_image_from_page(doc: &lopdf::Document, page_id: lopdf::ObjectId) -> Option<Vec<u8>> {
     let page_obj  = doc.get_object(page_id).ok()?;
     let page_dict = page_obj.as_dict().ok()?;
@@ -578,7 +534,6 @@ fn extract_any_image_from_page(doc: &lopdf::Document, page_id: lopdf::ObjectId) 
     let xobj_obj  = res_dict.get(b"XObject").ok()?;
     let xobj_dict = resolve_to_dict(doc, xobj_obj)?;
 
-    // Collect all candidate images with their pixel area so we can pick the largest
     struct Candidate { area: u64, bytes: Vec<u8> }
     let mut best: Option<Candidate> = None;
 
@@ -597,18 +552,15 @@ fn extract_any_image_from_page(doc: &lopdf::Document, page_id: lopdf::ObjectId) 
         let area = width * height;
         if area == 0 { continue; }
 
-        // Skip if we already have a larger image
         if let Some(ref b) = best { if b.area >= area { continue; } }
 
         let filter = stream.dict.get(b"Filter").ok();
 
         if pdf_name_eq(filter, b"DCTDecode") {
-            // JPEG — raw stream bytes are valid JPEG
             if !stream.content.is_empty() {
                 best = Some(Candidate { area, bytes: stream.content.clone() });
             }
         } else if pdf_name_eq(filter, b"FlateDecode") {
-            // Deflate-compressed raw pixels — decompress and re-encode as PNG
             if let Ok(decompressed) = stream.decompressed_content() {
                 let w = width as u32;
                 let h = height as u32;
@@ -626,12 +578,10 @@ fn extract_any_image_from_page(doc: &lopdf::Document, page_id: lopdf::ObjectId) 
                 }
             }
         } else if pdf_name_eq(filter, b"JPXDecode") {
-            // JPEG 2000 — browsers can't display this natively, but store as fallback
             if !stream.content.is_empty() {
                 best = Some(Candidate { area, bytes: stream.content.clone() });
             }
         } else if stream.content.len() > 1024 {
-            // Unknown filter but non-trivial content — store as fallback
             best = Some(Candidate { area, bytes: stream.content.clone() });
         }
     }
@@ -639,11 +589,7 @@ fn extract_any_image_from_page(doc: &lopdf::Document, page_id: lopdf::ObjectId) 
     best.map(|b| b.bytes)
 }
 
-
-
-/// Generate a placeholder cover for PDFs (tries JPEG extraction first).
 fn pdf_placeholder_cover(cache_path: &Path, file_path: &str) -> Result<(), String> {
-    // Try extracting the first JPEG from the PDF
     if let Some(jpeg) = pdf_extract_jpeg(Path::new(file_path), 0) {
         if let Ok(img) = image::load_from_memory(&jpeg) {
             let thumb = img.thumbnail(140, 210);
@@ -653,7 +599,6 @@ fn pdf_placeholder_cover(cache_path: &Path, file_path: &str) -> Result<(), Strin
             return fs::write(cache_path, buf.into_inner()).map_err(|e| e.to_string());
         }
     }
-    // Fallback: dark blue-grey gradient placeholder
     let img = image::DynamicImage::ImageRgb8(
         image::ImageBuffer::from_fn(140, 210, |_x, y| {
             let v = 45u8 + (y as u8 / 6).min(35);
@@ -667,7 +612,7 @@ fn pdf_placeholder_cover(cache_path: &Path, file_path: &str) -> Result<(), Strin
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  Unified dispatch: image_list / extract_page_bytes
+//  Unified dispatch
 // ─────────────────────────────────────────────────────────────────────────────
 
 fn image_list(path: &Path) -> Result<Vec<String>, String> {
@@ -709,7 +654,6 @@ fn ensure_cover_at(cache_path: &Path, file_path: &str) -> Result<(), String> {
     }
     let path = Path::new(file_path);
 
-    // PDF: special cover generation
     if path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).as_deref() == Some("pdf") {
         return pdf_placeholder_cover(cache_path, file_path);
     }
@@ -726,6 +670,34 @@ fn ensure_cover_at(cache_path: &Path, file_path: &str) -> Result<(), String> {
             fs::write(cache_path, buf.into_inner()).map_err(|e| e.to_string())
         }
         Err(_) => fs::write(cache_path, &raw).map_err(|e| e.to_string()),
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Crash log commands (Android diagnostics)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CRASH_PATHS: &[&str] = &[
+    "/data/data/com.lectortbo.reader/files/crash.txt",
+    "/sdcard/lector-tbo-crash.txt",
+];
+
+#[tauri::command]
+fn get_crash_log() -> String {
+    for path in CRASH_PATHS {
+        if let Ok(content) = fs::read_to_string(path) {
+            if !content.is_empty() {
+                return content;
+            }
+        }
+    }
+    String::new()
+}
+
+#[tauri::command]
+fn clear_crash_log() {
+    for path in CRASH_PATHS {
+        let _ = fs::remove_file(path);
     }
 }
 
@@ -822,7 +794,6 @@ fn scan_folder_impl(
         }
     }
 
-    // Mark missing comics in this folder
     let mut stmt = conn
         .prepare("SELECT id, file_path FROM comics WHERE file_path LIKE ?1")
         .map_err(|e| e.to_string())?;
@@ -925,7 +896,6 @@ async fn get_page_count(file_path: String) -> Result<usize, String> {
     .map_err(|e| e.to_string())?
 }
 
-/// Return the entire PDF as a base64 data URL so the frontend can embed it.
 #[tauri::command]
 async fn get_pdf_data_url(file_path: String) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -939,7 +909,6 @@ async fn get_pdf_data_url(file_path: String) -> Result<String, String> {
     .map_err(|e| e.to_string())?
 }
 
-/// Open a file with the operating system's default application.
 #[tauri::command]
 fn open_with_system(file_path: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
@@ -963,7 +932,6 @@ fn open_with_system(file_path: String) -> Result<(), String> {
             .spawn()
             .map_err(|e| e.to_string())?;
     }
-    // Android / iOS: no-op — the frontend shows the embedded viewer instead
     Ok(())
 }
 
@@ -1228,7 +1196,6 @@ fn open_reader_window(
         let mut id = state.reader_comic_id.lock().map_err(|e| e.to_string())?;
         *id = comic_id;
     }
-    // If reader window already exists, focus it and tell it to reload the new comic
     if let Some(win) = app.get_webview_window("reader") {
         #[cfg(desktop)]
         let _ = win.set_focus();
@@ -1270,7 +1237,6 @@ async fn get_page_panels(
 ) -> Result<Vec<PanelRect>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let path  = Path::new(&file_path);
-        // PDFs don't support guided-panel zoom
         if path.extension().and_then(|e| e.to_str()).map(|e| e.to_lowercase()).as_deref() == Some("pdf") {
             return Ok(vec![]);
         }
@@ -1381,7 +1347,10 @@ fn clear_missing_comics(state: State<AppState>) -> Result<(), String> {
     Ok(())
 }
 
-/// Fallback data dir used only when the Tauri path API is unavailable.
+// ─────────────────────────────────────────────────────────────────────────────
+//  Entry point
+// ─────────────────────────────────────────────────────────────────────────────
+
 fn dirs_data() -> PathBuf {
     std::env::var("HOME")
         .map(PathBuf::from)
@@ -1393,17 +1362,29 @@ fn dirs_data() -> PathBuf {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    // Build plugin list. tauri-plugin-shell and tauri-plugin-dialog are
-    // desktop-only — their init() panics on Android. #[cfg] cannot appear
-    // mid-chain, so we bind to a variable and conditionally extend it.
+    // Install panic hook before anything else so crashes are visible on Android.
+    // Writes to the app's private files dir; App.tsx reads it on next launch
+    // and displays it on screen instead of silently closing.
+    std::panic::set_hook(Box::new(|info| {
+        let msg = format!("CRASH: {}\n", info);
+        let paths = [
+            "/data/data/com.lectortbo.reader/files/crash.txt",
+            "/sdcard/lector-tbo-crash.txt",
+        ];
+        for path in &paths {
+            if let Ok(mut f) = fs::File::create(path) {
+                use std::io::Write;
+                let _ = f.write_all(msg.as_bytes());
+                break;
+            }
+        }
+    }));
+
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // Use the Tauri path API so we get the correct platform-specific
-            // data directory on every OS — especially Android, where $HOME is
-            // either unset or points to a path the app cannot write to.
             let data_dir = app.path().app_data_dir()?;
             fs::create_dir_all(&data_dir)?;
             let db_path = data_dir.join("panels.db");
@@ -1423,6 +1404,7 @@ pub fn run() {
             get_sources, remove_source, delete_comic, search_comics,
             clear_library, open_reader_window, get_reader_comic_id, get_comic,
             get_page_panels, clear_missing_comics, delete_folder_comics,
+            get_crash_log, clear_crash_log,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
