@@ -12,9 +12,6 @@
     "main"
   ],
   "permissions": [
-    "core:default",
-    "fs:default",
-    "fs:allow-read-recursive",
-    "fs:allow-write-recursive"
+    "core:default"
   ]
 }
