@@ -1394,8 +1394,12 @@ fn dirs_data() -> PathBuf {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // tauri-plugin-shell and tauri-plugin-dialog are desktop-only.
+        // Calling their init() on Android panics immediately at startup.
+        #[cfg(not(target_os = "android"))]
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_fs::init())
+        #[cfg(not(target_os = "android"))]
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Use the Tauri path API so we get the correct platform-specific
