@@ -10,12 +10,9 @@ import MobileApp from "./mobile/MobileApp";
 import { isAndroid } from "./mobile/usePlatform";
 
 // ── Detect which Tauri window we are ─────────────────────────────────────────
-// The reader window loads index.html#reader; the main window loads index.html
 function isReaderWindow(): boolean {
   if (typeof window === "undefined") return false;
-  // Primary: hash preserved in URL by Tauri WebviewUrl::App("index.html#reader")
   if (window.location.hash === "#reader") return true;
-  // Fallback: check all known Tauri v2 window label paths
   try {
     const internals = (window as any).__TAURI_INTERNALS__;
     if (internals?.metadata?.currentWindow?.label === "reader") return true;
@@ -24,6 +21,35 @@ function isReaderWindow(): boolean {
     if (meta?.currentWindow?.label === "reader") return true;
   } catch {}
   return false;
+}
+
+// ── Crash display — shown on next launch if app crashed on Android ────────────
+function CrashDisplay({ log, onClear }: { log: string; onClear: () => void }) {
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "#1a0000", color: "#ff6b6b",
+      padding: "20px", fontFamily: "monospace", fontSize: "12px",
+      overflowY: "auto", zIndex: 9999, whiteSpace: "pre-wrap", wordBreak: "break-all",
+    }}>
+      <div style={{ color: "#ffffff", fontSize: "16px", marginBottom: "12px", fontWeight: "bold" }}>
+        ⚠️ Crash detected on previous launch
+      </div>
+      <div style={{ color: "#ffaa00", marginBottom: "16px", fontSize: "11px" }}>
+        Screenshot this screen and send it for diagnosis
+      </div>
+      {log}
+      <br /><br />
+      <button
+        onClick={onClear}
+        style={{
+          background: "#cc0000", color: "#fff", border: "none",
+          padding: "14px 28px", fontSize: "14px", borderRadius: "6px", cursor: "pointer",
+        }}
+      >
+        Clear log &amp; retry
+      </button>
+    </div>
+  );
 }
 
 // ── Error Boundary ────────────────────────────────────────────────────────────
@@ -104,7 +130,6 @@ function MainApp() {
         await loadLibrary();
         await loadSources();
         setReady(true);
-        // Fire-and-forget: generate any missing cover thumbnails in parallel
         invoke("precache_all_covers").catch(() => {});
       } catch (e: any) {
         if (attempts < 20) setTimeout(tryInit, 300);
@@ -138,6 +163,23 @@ function MainApp() {
 export default function App() {
   const reader = isReaderWindow();
   const mobile = isAndroid();
+  const [crashLog, setCrashLog] = useState("");
+
+  useEffect(() => {
+    invoke<string>("get_crash_log").then(log => {
+      if (log) setCrashLog(log);
+    }).catch(() => {});
+  }, []);
+
+  if (crashLog) return (
+    <CrashDisplay
+      log={crashLog}
+      onClear={() => {
+        invoke("clear_crash_log").then(() => setCrashLog("")).catch(() => setCrashLog(""));
+      }}
+    />
+  );
+
   return (
     <ErrorBoundary>
       {reader ? <ReaderWindow /> : mobile ? <MobileApp /> : <MainApp />}
