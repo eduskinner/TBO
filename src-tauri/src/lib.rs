@@ -1396,15 +1396,10 @@ pub fn run() {
     // Build plugin list. tauri-plugin-shell and tauri-plugin-dialog are
     // desktop-only — their init() panics on Android. #[cfg] cannot appear
     // mid-chain, so we bind to a variable and conditionally extend it.
-    let builder = tauri::Builder::default()
-        .plugin(tauri_plugin_fs::init());
-
-    #[cfg(not(target_os = "android"))]
-    let builder = builder
+    tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_dialog::init());
-
-    builder
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // Use the Tauri path API so we get the correct platform-specific
             // data directory on every OS — especially Android, where $HOME is
