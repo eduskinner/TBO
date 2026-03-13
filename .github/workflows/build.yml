@@ -64,7 +64,18 @@ jobs:
           fi
 
       - name: install AndroidManifest with storage permissions
-        run: echo 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0idXRmLTgiPz4KPG1hbmlmZXN0IHhtbG5zOmFuZHJvaWQ9Imh0dHA6Ly9zY2hlbWFzLmFuZHJvaWQuY29tL2Fway9yZXMvYW5kcm9pZCI+CgogICAgPHVzZXMtcGVybWlzc2lvbiBhbmRyb2lkOm5hbWU9ImFuZHJvaWQucGVybWlzc2lvbi5JTlRFUk5FVCIgLz4KICAgIDx1c2VzLXBlcm1pc3Npb24gYW5kcm9pZDpuYW1lPSJhbmRyb2lkLnBlcm1pc3Npb24uV0FLRV9MT0NLIiAvPgoKICAgIDwhLS0gU3RvcmFnZTogcmVxdWlyZWQgdG8gcmVhZCBDQlIvQ0JaL1BERiBmcm9tIERvd25sb2FkcyBhbmQgY3VzdG9tIGZvbGRlcnMuCiAgICAgICAgIFdpdGhvdXQgdGhlc2UsIFdhbGtEaXIgb24gL3N0b3JhZ2UvZW11bGF0ZWQvMC8gcmV0dXJucyBub3RoaW5nLgogICAgICAgICBSRUFEX0VYVEVSTkFMX1NUT1JBR0UgIDogQW5kcm9pZCA5LTEyIChBUEkgMjgtMzIpCiAgICAgICAgIFdSSVRFX0VYVEVSTkFMX1NUT1JBR0UgOiBBbmRyb2lkIDw9OSAgKEFQSSAyOC0yOSkKICAgICAgICAgTUFOQUdFX0VYVEVSTkFMX1NUT1JBR0U6IEFuZHJvaWQgMTErICAoQVBJIDMwKykgbmVlZGVkIGZvciBub24tbWVkaWEKICAgICAgICAgICBmaWxlcyAoQ0JSL1BERikuIFVzZXIgZ3JhbnRzIG9uY2UgdmlhIFNldHRpbmdzID4gQXBwcyA+IFNwZWNpYWwgQWNjZXNzLiAtLT4KICAgIDx1c2VzLXBlcm1pc3Npb24gYW5kcm9pZDpuYW1lPSJhbmRyb2lkLnBlcm1pc3Npb24uUkVBRF9FWFRFUk5BTF9TVE9SQUdFIgogICAgICAgIGFuZHJvaWQ6bWF4U2RrVmVyc2lvbj0iMzIiIC8+CiAgICA8dXNlcy1wZXJtaXNzaW9uIGFuZHJvaWQ6bmFtZT0iYW5kcm9pZC5wZXJtaXNzaW9uLldSSVRFX0VYVEVSTkFMX1NUT1JBR0UiCiAgICAgICAgYW5kcm9pZDptYXhTZGtWZXJzaW9uPSIyOSIgLz4KICAgIDx1c2VzLXBlcm1pc3Npb24gYW5kcm9pZDpuYW1lPSJhbmRyb2lkLnBlcm1pc3Npb24uTUFOQUdFX0VYVEVSTkFMX1NUT1JBR0UiIC8+CgogICAgPGFwcGxpY2F0aW9uCiAgICAgICAgYW5kcm9pZDpsYWJlbD0iTGVjdG9yIFRCTyIKICAgICAgICBhbmRyb2lkOmljb249IkBtaXBtYXAvaWNfbGF1bmNoZXIiCiAgICAgICAgYW5kcm9pZDpoYXJkd2FyZUFjY2VsZXJhdGVkPSJ0cnVlIgogICAgICAgIGFuZHJvaWQ6cmVxdWVzdExlZ2FjeUV4dGVybmFsU3RvcmFnZT0idHJ1ZSIKICAgICAgICBhbmRyb2lkOnByZXNlcnZlTGVnYWN5RXh0ZXJuYWxTdG9yYWdlPSJ0cnVlIj4KCiAgICAgICAgPGFjdGl2aXR5CiAgICAgICAgICAgIGFuZHJvaWQ6Y29uZmlnQ2hhbmdlcz0ib3JpZW50YXRpb258a2V5Ym9hcmRIaWRkZW58a2V5Ym9hcmR8c2NyZWVuU2l6ZXxsb2NhbGV8bGF5b3V0RGlyZWN0aW9ufGZvbnRTY2FsZXxzY3JlZW5MYXlvdXR8ZGVuc2l0eXx1aU1vZGUiCiAgICAgICAgICAgIGFuZHJvaWQ6bmFtZT0iLk1haW5BY3Rpdml0eSIKICAgICAgICAgICAgYW5kcm9pZDpsYWJlbD0iTGVjdG9yIFRCTyIKICAgICAgICAgICAgYW5kcm9pZDpleHBvcnRlZD0idHJ1ZSI+CiAgICAgICAgICAgIDxpbnRlbnQtZmlsdGVyPgogICAgICAgICAgICAgICAgPGFjdGlvbiBhbmRyb2lkOm5hbWU9ImFuZHJvaWQuaW50ZW50LmFjdGlvbi5NQUlOIiAvPgogICAgICAgICAgICAgICAgPGNhdGVnb3J5IGFuZHJvaWQ6bmFtZT0iYW5kcm9pZC5pbnRlbnQuY2F0ZWdvcnkuTEFVTkNIRVIiIC8+CiAgICAgICAgICAgIDwvaW50ZW50LWZpbHRlcj4KICAgICAgICA8L2FjdGl2aXR5PgogICAgPC9hcHBsaWNhdGlvbj4KCjwvbWFuaWZlc3Q+Cg==' | base64 --decode > src-tauri/gen/android/app/src/main/AndroidManifest.xml
+        run: |
+          python3 -c '
+          path = "src-tauri/gen/android/app/src/main/AndroidManifest.xml"
+          with open(path, "r") as f: content = f.read()
+          perms = """
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+          """
+          with open(path, "w") as f: f.write(content.replace("<application", perms + "\n    <application"))
+          '
 
       - name: build android apk
         run: npm run tauri android build -- --apk --target aarch64 --debug
