@@ -1380,11 +1380,17 @@ pub fn run() {
         }
     }));
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_shell::init())
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_dialog::init())
-        .setup(|app| {
+    let mut builder = tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init());
+
+    #[cfg(desktop)]
+    {
+        builder = builder
+            .plugin(tauri_plugin_shell::init())
+            .plugin(tauri_plugin_dialog::init());
+    }
+
+    builder.setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             fs::create_dir_all(&data_dir)?;
             let db_path = data_dir.join("panels.db");
