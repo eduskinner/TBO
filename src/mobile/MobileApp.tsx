@@ -124,12 +124,21 @@ function AddFolderModal({ onClose }: { onClose: () => void }) {
 
   const handleScan = async () => {
     if (!path.trim()) return;
+    const hasPerm = await invoke<boolean>("check_android_permissions");
+    if (!hasPerm && path.startsWith("/storage/")) {
+      setPermWarn(true);
+      return;
+    }
     const result = await scanPath(path.trim());
     if (result.permissionDenied) {
       setPermWarn(true);   // stay open and show permission warning
     } else {
       onClose();
     }
+  };
+
+  const handleGrant = async () => {
+    await invoke("request_android_permissions");
   };
 
   return (
@@ -213,6 +222,17 @@ function AddFolderModal({ onClose }: { onClose: () => void }) {
             <p style={{ fontSize: 11, color: "var(--text3)" }}>
               On some phones this is under Special App Access → All Files Access
             </p>
+            <button
+              onClick={handleGrant}
+              style={{
+                marginTop: 14, width: "100%", padding: "10px",
+                background: "rgba(255,255,255,0.1)", color: "var(--text)",
+                border: "1px solid var(--border)", borderRadius: 8,
+                fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+              }}
+            >
+              <Settings size={14} /> Open Permission Settings
+            </button>
           </div>
         )}
 

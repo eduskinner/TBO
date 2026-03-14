@@ -1347,6 +1347,66 @@ fn clear_missing_comics(state: State<AppState>) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn check_android_permissions(app: tauri::AppHandle) -> bool {
+    #[cfg(target_os = "android")]
+    {
+        use jni::objects::JValue;
+        // JNI check for Environment.isExternalStorageManager()
+        if let Ok(mut env) = app.android_app().create_jni_env() {
+            if let Ok(env_class) = env.find_class("android/os/Environment") {
+                if let Ok(res) = env.call_static_method(env_class, "isExternalStorageManager", "()Z", &[]) {
+                    if let Ok(val) = res.z() {
+                        return val;
+                    }
+                }
+            }
+        }
+        return false;
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        true
+    }
+}
+
+#[tauri::command]
+fn request_android_permissions(app: tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "android")]
+    {
+        use jni::objects::JValue;
+        let mut env = app.android_app().create_jni_env().map_err(|e| e.to_string())?;
+        
+        // We want to open Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION
+        // intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
+        // intent.setData(Uri.parse("package:" + getPackageName()));
+        // startActivity(intent);
+
+        let action = "android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION";
+        let package_name = app.package_info().package_name.clone();
+        let uri_string = format!("package:{}", package_name);
+
+        let intent_class = env.find_class("android/content/Intent").map_err(|e| e.to_string())?;
+        let action_jstr = env.new_string(action).map_err(|e| e.to_string())?;
+        let intent = env.new_object(intent_class, "(Ljava/lang/String;)V", &[JValue::from(&action_jstr)]).map_err(|e| e.to_string())?;
+
+        let uri_class = env.find_class("android/net/Uri").map_err(|e| e.to_string())?;
+        let uri_jstr = env.new_string(uri_string).map_err(|e| e.to_string())?;
+        let uri = env.call_static_method(uri_class, "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::from(&uri_jstr)]).map_err(|e| e.to_string())?.l().map_err(|e| e.to_string())?;
+
+        let _ = env.call_method(&intent, "setData", "(Landroid/net/Uri;)Landroid/content/Intent;", &[JValue::from(&uri)]).map_err(|e| e.to_string())?;
+
+        let activity = app.android_app().ongoing_activity().map_err(|e| e.to_string())?;
+        let _ = env.call_method(activity, "startActivity", "(Landroid/content/Intent;)V", &[JValue::from(&intent)]).map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+    }
+    Ok(())
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Entry point
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1410,7 +1470,7 @@ pub fn run() {
             get_sources, remove_source, delete_comic, search_comics,
             clear_library, open_reader_window, get_reader_comic_id, get_comic,
             get_page_panels, clear_missing_comics, delete_folder_comics,
-            get_crash_log, clear_crash_log,
+            get_crash_log, clear_crash_log, check_android_permissions, request_android_permissions
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
