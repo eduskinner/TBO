@@ -36,7 +36,6 @@ unrar = "0.5"
 
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
-unrar = "0.5"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]

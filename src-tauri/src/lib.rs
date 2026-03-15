@@ -910,7 +910,7 @@ async fn get_pdf_data_url(file_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn open_with_system(_file_path: String) -> Result<(), String> {
+fn open_with_system(file_path: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open")
@@ -931,6 +931,10 @@ fn open_with_system(_file_path: String) -> Result<(), String> {
             .args(["/C", "start", "", &file_path])
             .spawn()
             .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "android")]
+    {
+        let _ = file_path;
     }
     Ok(())
 }
