@@ -910,7 +910,7 @@ async fn get_pdf_data_url(file_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn open_with_system(file_path: String) -> Result<(), String> {
+fn open_with_system(_file_path: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         std::process::Command::new("open")
@@ -1351,7 +1351,6 @@ fn clear_missing_comics(state: State<AppState>) -> Result<(), String> {
 fn check_android_permissions(app: tauri::AppHandle) -> bool {
     #[cfg(target_os = "android")]
     {
-        use jni::objects::JValue;
         // JNI check for Environment.isExternalStorageManager()
         if let Ok(mut env) = app.android_app().create_jni_env() {
             if let Ok(env_class) = env.find_class("android/os/Environment") {
@@ -1376,7 +1375,7 @@ fn request_android_permissions(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "android")]
     {
         use jni::objects::JValue;
-        let mut env = app.android_app().create_jni_env().map_err(|e| e.to_string())?;
+        let mut env = app.android_app().create_jni_env().map_err(|e: jni::errors::Error| e.to_string())?;
         
         // We want to open Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION
         // intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
@@ -1387,18 +1386,18 @@ fn request_android_permissions(app: tauri::AppHandle) -> Result<(), String> {
         let package_name = app.package_info().package_name.clone();
         let uri_string = format!("package:{}", package_name);
 
-        let intent_class = env.find_class("android/content/Intent").map_err(|e| e.to_string())?;
-        let action_jstr = env.new_string(action).map_err(|e| e.to_string())?;
-        let intent = env.new_object(intent_class, "(Ljava/lang/String;)V", &[JValue::from(&action_jstr)]).map_err(|e| e.to_string())?;
+        let intent_class = env.find_class("android/content/Intent").map_err(|e: jni::errors::Error| e.to_string())?;
+        let action_jstr = env.new_string(action).map_err(|e: jni::errors::Error| e.to_string())?;
+        let intent = env.new_object(&intent_class, "(Ljava/lang/String;)V", &[JValue::from(&action_jstr)]).map_err(|e: jni::errors::Error| e.to_string())?;
 
-        let uri_class = env.find_class("android/net/Uri").map_err(|e| e.to_string())?;
-        let uri_jstr = env.new_string(uri_string).map_err(|e| e.to_string())?;
-        let uri = env.call_static_method(uri_class, "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::from(&uri_jstr)]).map_err(|e| e.to_string())?.l().map_err(|e| e.to_string())?;
+        let uri_class = env.find_class("android/net/Uri").map_err(|e: jni::errors::Error| e.to_string())?;
+        let uri_jstr = env.new_string(uri_string).map_err(|e: jni::errors::Error| e.to_string())?;
+        let uri = env.call_static_method(&uri_class, "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::from(&uri_jstr)]).map_err(|e: jni::errors::Error| e.to_string())?.l().map_err(|e: jni::errors::Error| e.to_string())?;
 
-        let _ = env.call_method(&intent, "setData", "(Landroid/net/Uri;)Landroid/content/Intent;", &[JValue::from(&uri)]).map_err(|e| e.to_string())?;
+        let _ = env.call_method(&intent, "setData", "(Landroid/net/Uri;)Landroid/content/Intent;", &[JValue::from(&uri)]).map_err(|e: jni::errors::Error| e.to_string())?;
 
-        let activity = app.android_app().ongoing_activity().map_err(|e| e.to_string())?;
-        let _ = env.call_method(activity, "startActivity", "(Landroid/content/Intent;)V", &[JValue::from(&intent)]).map_err(|e| e.to_string())?;
+        let activity = app.android_app().ongoing_activity().map_err(|e: String| e)?;
+        let _ = env.call_method(&activity, "startActivity", "(Landroid/content/Intent;)V", &[JValue::from(&intent)]).map_err(|e: jni::errors::Error| e.to_string())?;
     }
     #[cfg(not(target_os = "android"))]
     {
@@ -1440,15 +1439,13 @@ pub fn run() {
         }
     }));
 
-    let mut builder = tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_fs::init());
 
     #[cfg(desktop)]
-    {
-        builder = builder
+    let builder = builder
             .plugin(tauri_plugin_shell::init())
             .plugin(tauri_plugin_dialog::init());
-    }
 
     builder.setup(|app| {
             let data_dir = app.path().app_data_dir()?;
