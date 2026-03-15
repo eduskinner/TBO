@@ -1351,8 +1351,9 @@ fn clear_missing_comics(state: State<AppState>) -> Result<(), String> {
 fn check_android_permissions(app: tauri::AppHandle) -> bool {
     #[cfg(target_os = "android")]
     {
+        let android_app = app.android_app();
         // JNI check for Environment.isExternalStorageManager()
-        if let Ok(mut env) = app.android_app().create_jni_env() {
+        if let Ok(mut env) = android_app.create_jni_env() {
             if let Ok(env_class) = env.find_class("android/os/Environment") {
                 if let Ok(res) = env.call_static_method(env_class, "isExternalStorageManager", "()Z", &[]) {
                     if let Ok(val) = res.z() {
@@ -1374,17 +1375,13 @@ fn check_android_permissions(app: tauri::AppHandle) -> bool {
 fn request_android_permissions(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "android")]
     {
-        use jni::objects::JValue;
-        let mut env = app.android_app().create_jni_env().map_err(|e: jni::errors::Error| e.to_string())?;
+        use jni::objects::{JValue, JObject};
+        let android_app = app.android_app();
+        let mut env = android_app.create_jni_env().map_err(|e: jni::errors::Error| e.to_string())?;
         
-        // We want to open Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION
-        // intent = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION);
-        // intent.setData(Uri.parse("package:" + getPackageName()));
-        // startActivity(intent);
-
         let action = "android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION";
-        let package_name = app.package_info().package_name.clone();
-        let uri_string = format!("package:{}", package_name);
+        let identifier = app.config().identifier.clone();
+        let uri_string = format!("package:{}", identifier);
 
         let intent_class = env.find_class("android/content/Intent").map_err(|e: jni::errors::Error| e.to_string())?;
         let action_jstr = env.new_string(action).map_err(|e: jni::errors::Error| e.to_string())?;
@@ -1396,8 +1393,9 @@ fn request_android_permissions(app: tauri::AppHandle) -> Result<(), String> {
 
         let _ = env.call_method(&intent, "setData", "(Landroid/net/Uri;)Landroid/content/Intent;", &[JValue::from(&uri)]).map_err(|e: jni::errors::Error| e.to_string())?;
 
-        let activity = app.android_app().ongoing_activity().map_err(|e: String| e)?;
-        let _ = env.call_method(&activity, "startActivity", "(Landroid/content/Intent;)V", &[JValue::from(&intent)]).map_err(|e: jni::errors::Error| e.to_string())?;
+        let activity = android_app.ongoing_activity().map_err(|e: String| e)?;
+        let activity_obj = unsafe { JObject::from_raw(activity as jni::sys::jobject) };
+        let _ = env.call_method(&activity_obj, "startActivity", "(Landroid/content/Intent;)V", &[JValue::from(&intent)]).map_err(|e: jni::errors::Error| e.to_string())?;
     }
     #[cfg(not(target_os = "android"))]
     {
