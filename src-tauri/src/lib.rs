@@ -1376,6 +1376,7 @@ fn request_android_permissions(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "android")]
     {
         use jni::objects::{JValue, JObject};
+        // In Tauri 2, the AndroidApp can be retrieved from the handle
         let android_app = app.android_app();
         let mut env = android_app.create_jni_env().map_err(|e: jni::errors::Error| e.to_string())?;
         
