@@ -35,6 +35,7 @@ lopdf = "0.31"
 unrar = "0.5"
 
 [target.'cfg(target_os = "android")'.dependencies]
+tauri = { version = "2", features = ["android"] }
 jni = "0.21"
 
 [features]

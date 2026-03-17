@@ -7,33 +7,80 @@ import { useStore } from "../store";
 import FolderCard from "./FolderCard";
 import ComicCard  from "./ComicCard";
 import { preloadCovers } from "../store/coverQueue";
-import type { SortField } from "../types";
-import type { Comic } from "../types";
+import type { SortField, Comic, Source } from "../types";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-interface FolderGroup { name: string; dir: string; comics: Comic[]; }
+// (FolderGroup interface removed as it's now handled by getHierarchicalLayout)
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function folderOf(fp: string): { name: string; dir: string } {
-  const parts = fp.replace(/\\/g, "/").split("/");
-  return {
-    name: parts.length >= 2 ? parts[parts.length - 2] : "Unknown",
-    dir:  parts.slice(0, -1).join("/"),
-  };
-}
-
-function groupByFolder(comics: Comic[]): FolderGroup[] {
-  const map = new Map<string, FolderGroup>();
-  for (const c of comics) {
-    const { name, dir } = folderOf(c.file_path);
-    if (!map.has(dir)) map.set(dir, { name, dir, comics: [] });
-    map.get(dir)!.comics.push(c);
+/**
+ * Helper: Given a list of comics and a current path, determine the immediate
+ * subfolders and immediate files to show in a hierarchical view.
+ */
+function getHierarchicalLayout(
+  allComics: Comic[],
+  currentDir: string | null,
+  sources: Source[]
+) {
+  // If no folder is selected, show the root sources
+  if (currentDir === null) {
+    return {
+      folders: sources.map((s) => {
+        const comicsInSource = allComics.filter((c) =>
+          c.file_path.replace(/\\/g, "/").startsWith(s.path.replace(/\\/g, "/"))
+        );
+        return {
+          name: s.name || s.path.split(/[/\\]/).pop() || "Library",
+          dir: s.path.replace(/\\/g, "/"),
+          comics: comicsInSource,
+        };
+      }).filter(f => f.comics.length > 0),
+      comics: [],
+    };
   }
-  return Array.from(map.values()).sort((a, b) =>
-    a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+
+  const normalizedCurrent = currentDir.replace(/\\/g, "/");
+  const prefix = normalizedCurrent.endsWith("/") ? normalizedCurrent : normalizedCurrent + "/";
+
+  const immediateComics: Comic[] = [];
+  const subFolderMap = new Map<string, Comic[]>();
+
+  for (const c of allComics) {
+    const fp = c.file_path.replace(/\\/g, "/");
+    if (!fp.startsWith(prefix)) continue;
+
+    const relative = fp.slice(prefix.length);
+    const parts = relative.split("/");
+
+    if (parts.length === 1) {
+      // It's a file directly in this folder
+      immediateComics.push(c);
+    } else {
+      // It's in a subfolder. Group by the immediate next directory name.
+      const folderName = parts[0];
+      const folderPath = prefix + folderName;
+      if (!subFolderMap.has(folderPath)) {
+        subFolderMap.set(folderPath, []);
+      }
+      subFolderMap.get(folderPath)!.push(c);
+    }
+  }
+
+  const folders = Array.from(subFolderMap.entries())
+    .map(([dir, comics]) => ({
+      name: dir.split("/").pop() || "Folder",
+      dir,
+      comics,
+    }))
+    .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
+
+  const comics = immediateComics.sort((a, b) =>
+    a.file_name.toLowerCase().localeCompare(b.file_name.toLowerCase())
   );
+
+  return { folders, comics };
 }
 
 // ── Sort options ──────────────────────────────────────────────────────────────
@@ -50,67 +97,84 @@ const SORT_OPTIONS: { value: SortField; label: string }[] = [
 
 export default function Library() {
   const {
-    comics, loading, scanning, scanResult, scanProgress,
+    comics, sources, loading, scanning, scanResult, scanProgress,
     searchQuery, sortField, sortAsc, filterStatus,
     setSearch, setSort, toggleSortDir, setFilterStatus,
     openReader, rescanSources, openAddFolder, clearMissingComics,
   } = useStore();
 
+  const [activeDir, setActiveDir] = useState<string | null>(null);
+  const inFolder = activeDir !== null;
   const missingTotal = comics.filter(c => c.missing).length;
 
-  // Which folder is open (null = top-level folders view)
-  const [activeDir, setActiveDir] = useState<string | null>(null);
-
-  const allGroups = useMemo(() => groupByFolder(comics), [comics]);
-
-  // Active folder's comics (apply filters inside the folder)
-  const activeGroup = useMemo(
-    () => allGroups.find((g) => g.dir === activeDir) ?? null,
-    [allGroups, activeDir]
+  // 1. Get the raw hierarchical layout for the current directory
+  const layout = useMemo(() => 
+    getHierarchicalLayout(comics, activeDir, sources),
+    [comics, activeDir, sources]
   );
 
-  // Within a folder: filter + search comics
-  const visibleComics = useMemo(() => {
-    if (!activeGroup) return [];
-    let list = [...activeGroup.comics];
-    if (filterStatus !== "all") list = list.filter((c) => c.read_status === filterStatus);
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter((c) =>
-        c.title.toLowerCase().includes(q) ||
-        c.series.toLowerCase().includes(q) ||
+  // 2. Apply searching/filtering to the comics and folders in this layout
+  const visible = useMemo(() => {
+    let { folders, comics: files } = layout;
+    const q = searchQuery.toLowerCase().trim();
+
+    // Inside a folder, we might filter by status
+    if (activeDir !== null && filterStatus !== "all") {
+      files = files.filter(c => c.read_status === filterStatus);
+      // For folders, we only show them if they contain at least one comic matching the status
+      folders = folders.filter(f => f.comics.some(c => c.read_status === filterStatus));
+    }
+
+    if (q) {
+      files = files.filter(c => 
+        c.title.toLowerCase().includes(q) || 
+        c.series.toLowerCase().includes(q) || 
         c.file_name.toLowerCase().includes(q)
       );
+      // Only show folders if their name matches OR they contain a matching comic
+      folders = folders.filter(f => 
+        f.name.toLowerCase().includes(q) || 
+        f.comics.some(c => 
+          c.title.toLowerCase().includes(q) || 
+          c.series.toLowerCase().includes(q) || 
+          c.file_name.toLowerCase().includes(q)
+        )
+      );
     }
-    return list;
-  }, [activeGroup, filterStatus, searchQuery]);
+    
+    // sorting files
+    files.sort((a, b) => {
+      let av: any, bv: any;
+      if (sortField === "title") { av = a.title; bv = b.title; }
+      else if (sortField === "series") { av = a.series || a.title; bv = b.series || b.title; }
+      else if (sortField === "date_added") { av = a.date_added; bv = b.date_added; }
+      else if (sortField === "year") { av = a.year || 0; bv = b.year || 0; }
+      else if (sortField === "read_status") { av = a.read_status; bv = b.read_status; }
+      else { av = a.file_name; bv = b.file_name; }
+      
+      const res = String(av).toLowerCase().localeCompare(String(bv).toLowerCase());
+      return sortAsc ? res : -res;
+    });
 
-  // At top level: filter groups by search (match folder name or any comic title)
-  const visibleGroups = useMemo(() => {
-    if (activeDir) return [];
-    if (!searchQuery.trim() && filterStatus === "all") return allGroups;
-    return allGroups
-      .map((g) => {
-        let comics = [...g.comics];
-        if (filterStatus !== "all") comics = comics.filter((c) => c.read_status === filterStatus);
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
-          comics = comics.filter((c) =>
-            c.title.toLowerCase().includes(q) ||
-            c.series.toLowerCase().includes(q) ||
-            g.name.toLowerCase().includes(q)
-          );
-        }
-        return { ...g, comics };
-      })
-      .filter((g) => g.comics.length > 0);
-  }, [allGroups, activeDir, searchQuery, filterStatus]);
+    return { folders, comics: files };
+  }, [layout, searchQuery, filterStatus, sortField, sortAsc, activeDir]);
+
+  const goUp = () => {
+    if (!activeDir) return;
+    const norm = activeDir.replace(/\\/g, "/");
+    // If it is one of our root sources, go to null
+    if (sources.some(s => s.path.replace(/\\/g, "/") === norm)) {
+      setActiveDir(null);
+    } else {
+      const parts = norm.split("/");
+      parts.pop();
+      setActiveDir(parts.join("/"));
+    }
+  };
 
   const scanPct = scanProgress && scanProgress.found > 0
     ? Math.round((scanProgress.current / scanProgress.found) * 100)
     : 0;
-
-  const inFolder = activeDir !== null;
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -124,12 +188,12 @@ export default function Library() {
         {/* Back button */}
         {inFolder && (
           <button
-            onClick={() => setActiveDir(null)}
+            onClick={goUp}
             className="flex items-center gap-1 flex-shrink-0 transition-colors"
             style={{ color: "var(--accent)", fontSize: 13, fontWeight: 600 }}
           >
             <ChevronLeft size={16} />
-            Collections
+            Back
           </button>
         )}
 
@@ -241,7 +305,7 @@ export default function Library() {
       )}
 
       {/* ── Folder breadcrumb ────────────────────────────────────────────── */}
-      {inFolder && activeGroup && (
+      {inFolder && (
         <div className="flex items-center gap-2.5 px-6 py-3 flex-shrink-0"
           style={{ background: "var(--bg2)", borderBottom: "1px solid var(--border)" }}>
           <FolderOpen size={15} style={{ color: "var(--accent)", flexShrink: 0 }} />
@@ -249,11 +313,12 @@ export default function Library() {
             fontFamily: "'Bebas Neue', sans-serif",
             fontSize: 20, letterSpacing: 1.5,
             color: "var(--text)", lineHeight: 1,
+            overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap"
           }}>
-            {activeGroup.name}
+            {activeDir.split("/").pop()}
           </span>
           <span style={{ fontSize: 11, color: "var(--text3)", fontFamily: "'IBM Plex Mono',monospace" }}>
-            {visibleComics.length} / {activeGroup.comics.length} comics
+            {visible.folders.length} folders, {visible.comics.length} comics
           </span>
         </div>
       )}
@@ -277,49 +342,53 @@ export default function Library() {
             }
           />
 
-        ) : inFolder ? (
-          /* ── Level 2: comics inside a folder ─────────────────────────── */
-          visibleComics.length === 0 ? (
-            <Empty icon={<Search size={36} style={{ color: "var(--text3)" }} />} title="No matching comics" subtitle="Try a different search or filter" />
-          ) : (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))",
-              gap: 16,
-            }}>
-              {visibleComics.map((comic) => (
-                <ComicCard key={comic.id} comic={comic} onClick={() => openReader(comic)} />
-              ))}
-            </div>
-          )
-
         ) : (
-          /* ── Level 1: folder cards ────────────────────────────────────── */
-          visibleGroups.length === 0 ? (
-            <Empty icon={<Search size={36} style={{ color: "var(--text3)" }} />} title="No results" subtitle="Try a different search term" />
-          ) : (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
-              gap: 20,
-            }}>
-              {visibleGroups.map((group) => (
-                <FolderCard
-                  key={group.dir}
-                  name={group.name}
-                  dir={group.dir}
-                  comics={group.comics}
-                  onClick={() => {
-                    setActiveDir(group.dir);
-                    setSearch("");
-                    setFilterStatus("all");
-                    // Start loading all covers in this folder in the background
-                    preloadCovers(group.comics.map((c) => ({ id: c.id, file_path: c.file_path })));
-                  }}
-                />
-              ))}
-            </div>
-          )
+          <div style={{ display: "flex", flexDirection: "column", gap: 32 }}>
+            {/* ── Folders ─────────────────────────────────────────────────── */}
+            {visible.folders.length > 0 && (
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))",
+                gap: 20,
+              }}>
+                {visible.folders.map((group) => (
+                  <FolderCard
+                    key={group.dir}
+                    name={group.name}
+                    dir={group.dir}
+                    comics={group.comics}
+                    onClick={() => {
+                      setActiveDir(group.dir);
+                      setSearch("");
+                      setFilterStatus("all");
+                      preloadCovers(group.comics.map((c) => ({ id: c.id, file_path: c.file_path })));
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* ── Comics ──────────────────────────────────────────────────── */}
+            {visible.comics.length > 0 && (
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+                gap: 16,
+              }}>
+                {visible.comics.map((comic) => (
+                  <ComicCard key={comic.id} comic={comic} onClick={() => openReader(comic)} />
+                ))}
+              </div>
+            )}
+
+            {visible.folders.length === 0 && visible.comics.length === 0 && (
+              <Empty 
+                icon={<Search size={36} style={{ color: "var(--text3)" }} />} 
+                title="No results" 
+                subtitle="Try a different search term or filter" 
+              />
+            )}
+          </div>
         )}
       </div>
     </div>
