@@ -14,7 +14,6 @@ name = "panels_lib"
 crate-type = ["lib", "staticlib", "cdylib"]
 
 [dependencies]
-tauri = { version = "2", features = [] }
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
@@ -32,6 +31,7 @@ image = { version = "0.24", features = ["jpeg"] }
 lopdf = "0.31"
 
 [target.'cfg(not(target_os = "android"))'.dependencies]
+tauri = { version = "2" }
 unrar = "0.5"
 
 [target.'cfg(target_os = "android")'.dependencies]
