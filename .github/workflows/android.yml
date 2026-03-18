@@ -1,14 +1,6 @@
 name: Build Android
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'src-tauri/**'
-      - 'src/**'
-      - 'package.json'
-      - '.github/workflows/android.yml'
   workflow_dispatch:
 
 env:

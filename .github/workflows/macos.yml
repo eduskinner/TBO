@@ -1,14 +1,6 @@
 name: Build macOS
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'src-tauri/**'
-      - 'src/**'
-      - 'package.json'
-      - '.github/workflows/macos.yml'
   workflow_dispatch:
 
 env:
