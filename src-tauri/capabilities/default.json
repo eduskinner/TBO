@@ -37,35 +37,6 @@
         "/sdcard/**",
         "/"
       ]
-    },
-    "panels:allow-get-library",
-    "panels:allow-scan-folder",
-    "panels:allow-rescan-sources",
-    "panels:allow-update-page-count",
-    "panels:allow-get-cover",
-    "panels:allow-get-covers-batch",
-    "panels:allow-precache-all-covers",
-    "panels:allow-get-page",
-    "panels:allow-get-page-count",
-    "panels:allow-get-pdf-data-url",
-    "panels:allow-open-with-system",
-    "panels:allow-update-comic",
-    "panels:allow-toggle-read-status",
-    "panels:allow-update-reading-progress",
-    "panels:allow-get-sources",
-    "panels:allow-remove-source",
-    "panels:allow-delete-comic",
-    "panels:allow-search-comics",
-    "panels:allow-clear-library",
-    "panels:allow-open-reader-window",
-    "panels:allow-get-reader-comic-id",
-    "panels:allow-get-comic",
-    "panels:allow-get-page-panels",
-    "panels:allow-clear-missing-comics",
-    "panels:allow-delete-folder-comics",
-    "panels:allow-get-crash-log",
-    "panels:allow-clear-crash-log",
-    "panels:allow-check-android-permissions",
-    "panels:allow-request-android-permissions"
+    }
   ]
 }
