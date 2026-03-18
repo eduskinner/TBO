@@ -9,7 +9,7 @@ use rayon::prelude::*;
 use regex::Regex;
 use rusqlite::{params, Connection, Result as SqlResult};
 use serde::{Deserialize, Serialize};
-use image::GenericImageView;
+use image::{GenericImageView, ImageEncoder};
 use tauri::{AppHandle, Manager, State, Emitter};
 use uuid::Uuid;
 use walkdir::WalkDir;
@@ -571,7 +571,7 @@ fn extract_any_image_from_page(doc: &lopdf::Document, page_id: lopdf::ObjectId) 
                     let color_type = if bpp >= 3 { image::ColorType::Rgb8 } else { image::ColorType::L8 };
                     let mut buf = std::io::Cursor::new(Vec::new());
                     if image::codecs::png::PngEncoder::new(&mut buf)
-                        .encode(&decompressed, w, h, color_type).is_ok()
+                        .write_image(&decompressed, w, h, color_type).is_ok()
                     {
                         best = Some(Candidate { area, bytes: buf.into_inner() });
                     }
@@ -1352,16 +1352,13 @@ fn clear_missing_comics(state: State<AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn check_android_permissions(app: tauri::AppHandle) -> bool {
+fn check_android_permissions(_app: tauri::AppHandle) -> bool {
     #[cfg(target_os = "android")]
     {
-        // Use the handle to get the AndroidApp
-        let android_app = app.android_app();
+        let android_app = tauri::android::android_app();
         if let Ok(mut env) = android_app.create_jni_env() {
-            let env_class_res: Result<jni::objects::JClass<'_>, jni::errors::Error> = env.find_class("android/os/Environment");
-            if let Ok(env_class) = env_class_res {
-                let res_res: Result<jni::objects::JValue<'_>, jni::errors::Error> = env.call_static_method(&env_class, "isExternalStorageManager", "()Z", &[]);
-                if let Ok(res) = res_res {
+            if let Ok(env_class) = env.find_class("android/os/Environment") {
+                if let Ok(res) = env.call_static_method(&env_class, "isExternalStorageManager", "()Z", &[]) {
                     if let Ok(val) = res.z() {
                         return val;
                     }
@@ -1372,7 +1369,6 @@ fn check_android_permissions(app: tauri::AppHandle) -> bool {
     }
     #[cfg(not(target_os = "android"))]
     {
-        let _ = app;
         true
     }
 }
@@ -1381,23 +1377,23 @@ fn check_android_permissions(app: tauri::AppHandle) -> bool {
 fn request_android_permissions(app: tauri::AppHandle) -> Result<(), String> {
     #[cfg(target_os = "android")]
     {
-        use jni::objects::{JValue, JObject, JClass, JString};
+        use jni::objects::{JValue, JObject, JString};
         use jni::errors::Error as JniError;
 
-        let android_app = app.android_app();
+        let android_app = tauri::android::android_app();
         let mut env = android_app.create_jni_env().map_err(|e: JniError| e.to_string())?;
         
         let action = "android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION";
         let identifier = app.config().identifier.clone();
         let uri_string = format!("package:{}", identifier);
 
-        let intent_class: JClass<'_> = env.find_class("android/content/Intent").map_err(|e: JniError| e.to_string())?;
-        let action_jstr: JString<'_> = env.new_string(action).map_err(|e: JniError| e.to_string())?;
-        let intent: JObject<'_> = env.new_object(&intent_class, "(Ljava/lang/String;)V", &[JValue::from(&action_jstr)]).map_err(|e: JniError| e.to_string())?;
+        let intent_class = env.find_class("android/content/Intent").map_err(|e: JniError| e.to_string())?;
+        let action_jstr = env.new_string(action).map_err(|e: JniError| e.to_string())?;
+        let intent = env.new_object(&intent_class, "(Ljava/lang/String;)V", &[JValue::from(&action_jstr)]).map_err(|e: JniError| e.to_string())?;
 
-        let uri_class: JClass<'_> = env.find_class("android/net/Uri").map_err(|e: JniError| e.to_string())?;
-        let uri_jstr: JString<'_> = env.new_string(uri_string).map_err(|e: JniError| e.to_string())?;
-        let uri: JObject<'_> = env.call_static_method(&uri_class, "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::from(&uri_jstr)]).map_err(|e: JniError| e.to_string())?.l().map_err(|e: JniError| e.to_string())?;
+        let uri_class = env.find_class("android/net/Uri").map_err(|e: JniError| e.to_string())?;
+        let uri_jstr = env.new_string(uri_string).map_err(|e: JniError| e.to_string())?;
+        let uri = env.call_static_method(&uri_class, "parse", "(Ljava/lang/String;)Landroid/net/Uri;", &[JValue::from(&uri_jstr)]).map_err(|e: JniError| e.to_string())?.l().map_err(|e: JniError| e.to_string())?;
 
         let _ = env.call_method(&intent, "setData", "(Landroid/net/Uri;)Landroid/content/Intent;", &[JValue::from(&uri)]).map_err(|e: JniError| e.to_string())?;
 
