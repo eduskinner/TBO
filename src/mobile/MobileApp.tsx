@@ -19,7 +19,7 @@ import {
   Menu, X, ChevronLeft, Search, RefreshCw, FolderPlus,
   Loader2, FolderOpen, Settings, Library,
   CheckCircle, Clock, ChevronRight, ZoomIn, ZoomOut,
-  ArrowLeft, AlertCircle, Folder, HardDrive,
+  ArrowLeft, AlertCircle, Folder,
 } from "lucide-react";
 import { useStore, type ScanProgress } from "../store";
 import { loadCover, placeholderColor, preloadCovers } from "../store/coverQueue";
