@@ -217,17 +217,23 @@ export default function Reader({ comic, onClose }: Props) {
     setCurrentPage(p); setGuidedPos({ page: p, zoneIdx: 0 });
     setZoom(1); setPanX(0); setPanY(0);
 
-    loadPageHigh(filePath, p).then(d => applyPage(p, d)).catch(() => {});
+    const isPDF = filePath.toLowerCase().endsWith(".pdf");
+
+    if (!isPDF) {
+      loadPageHigh(filePath, p).then(d => applyPage(p, d)).catch(() => {});
+    }
 
     invoke<number>("get_page_count", { filePath }).then(n => {
       setTotalPages(n);
-      if (p+1 < n) loadPageHigh(filePath, p+1).then(d => applyPage(p+1, d)).catch(() => {});
-      if (p+2 < n) loadPageHigh(filePath, p+2).then(d => applyPage(p+2, d)).catch(() => {});
-      startCrawler(p, n);
+      if (!isPDF) {
+        if (p+1 < n) loadPageHigh(filePath, p+1).then(d => applyPage(p+1, d)).catch(() => {});
+        if (p+2 < n) loadPageHigh(filePath, p+2).then(d => applyPage(p+2, d)).catch(() => {});
+        startCrawler(p, n);
+      }
     }).catch(console.error);
 
     // If PDF, load the full document for frontend rendering
-    if (filePath.toLowerCase().endsWith(".pdf")) {
+    if (isPDF) {
       if (pdfLoadingRef.current !== filePath) {
         pdfLoadingRef.current = filePath;
         setPdfDoc(null);
@@ -256,7 +262,14 @@ export default function Reader({ comic, onClose }: Props) {
       renderPdfPage(pdfDoc, currentPage).then(dataUrl => {
         applyPage(currentPage, dataUrl);
       });
-    } else {
+      // Pre-render next and prev pages if possible
+      if (currentPage + 1 < totalPages) {
+        renderPdfPage(pdfDoc, currentPage + 1).then(dataUrl => applyPage(currentPage + 1, dataUrl));
+      }
+      if (currentPage > 0) {
+        renderPdfPage(pdfDoc, currentPage - 1).then(dataUrl => applyPage(currentPage - 1, dataUrl));
+      }
+    } else if (!filePath.toLowerCase().endsWith(".pdf")) {
       loadHigh(currentPage);
       loadHigh(currentPage + 1);
       loadHigh(currentPage + 2);
