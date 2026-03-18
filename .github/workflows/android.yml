@@ -1,39 +1,20 @@
-name: Build and Release
+name: Build Android
 
 on:
   push:
     branches:
       - main
+    paths:
+      - 'src-tauri/**'
+      - 'src/**'
+      - 'package.json'
+      - '.github/workflows/android.yml'
   workflow_dispatch:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  build-macos:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        architecture: [x86_64, aarch64]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.architecture == 'x86_64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}
-      - name: install frontend dependencies
-        run: npm install
-      - name: build tauri desktop
-        run: npm run tauri build -- --target ${{ matrix.architecture == 'x86_64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}
-        env:
-          APPLE_SIGNING_IDENTITY: "-"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Lector-TBO-macOS-${{ matrix.architecture }}
-          path: src-tauri/target/${{ matrix.architecture == 'x86_64' && 'x86_64-apple-darwin' || 'aarch64-apple-darwin' }}/release/bundle/dmg/*.dmg
-
   build-android:
     runs-on: ubuntu-latest
     steps:
@@ -83,38 +64,3 @@ jobs:
         with:
           name: Lector-TBO-Android
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
-
-  create-release:
-    needs: [build-macos, build-android]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: Lector-TBO-macOS-aarch64
-          path: release-artifacts
-      - uses: actions/download-artifact@v4
-        with:
-          name: Lector-TBO-macOS-x86_64
-          path: release-artifacts
-      - uses: actions/download-artifact@v4
-        with:
-          name: Lector-TBO-Android
-          path: release-artifacts
-      - uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: Lector TBO - Latest Build
-          body: |
-            Automated build of Lector TBO.
-            - macOS Apple Silicon: aarch64.dmg
-            - macOS Intel: x86_64.dmg
-            - Android arm64: debug.apk
-          draft: false
-          prerelease: false
-          files: |
-            release-artifacts/**/*.dmg
-            release-artifacts/**/*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

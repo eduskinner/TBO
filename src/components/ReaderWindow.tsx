@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Loader2 } from "lucide-react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import Reader from "./Reader";
 import type { Comic } from "../types";
 
@@ -71,7 +72,7 @@ export default function ReaderWindow() {
 
   return (
     <div style={{ height:"100vh", overflow:"hidden" }}>
-      <Reader comic={comic} onClose={() => window.close()} />
+      <Reader comic={comic} onClose={() => getCurrentWindow().close()} />
     </div>
   );
 }

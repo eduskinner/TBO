@@ -18,6 +18,18 @@ import type { Comic } from "../types";
 import type { ReaderLayout, ReaderDirection } from "../types";
 import { loadPageHigh, loadPageLow, getCachedPage, isPageCached } from "../store/pageQueue";
 
+// PDF.js integration
+import * as pdfjs from "pdfjs-dist";
+// @ts-ignore
+import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+
+if (typeof window !== "undefined" && "pdfjsLib" in window) {
+  // @ts-ignore
+  (window as any).pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+} else {
+  pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+}
+
 // ── Panel detection ──────────────────────────────────────────────────────────
 // Finds comic panel bounding boxes from a loaded img via canvas pixel analysis.
 
@@ -144,6 +156,10 @@ export default function Reader({ comic, onClose }: Props) {
   // Image rendered dimensions (set onLoad, used for guided transforms)
   const [imgDims, setImgDims] = useState<ImgDims | null>(null);
 
+  // PDF.js document state
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const pdfLoadingRef = useRef<string | null>(null);
+
   const stripHeightRef = useRef(96);
   const [stripHeight,  setStripHeight] = useState(96);
   const stripRef    = useRef<HTMLDivElement>(null);
@@ -210,17 +226,56 @@ export default function Reader({ comic, onClose }: Props) {
       startCrawler(p, n);
     }).catch(console.error);
 
+    // If PDF, load the full document for frontend rendering
+    if (filePath.toLowerCase().endsWith(".pdf")) {
+      if (pdfLoadingRef.current !== filePath) {
+        pdfLoadingRef.current = filePath;
+        setPdfDoc(null);
+        invoke<string>("get_pdf_data_url", { filePath }).then(async (dataUrl) => {
+          const loadingTask = pdfjs.getDocument(dataUrl);
+          const doc = await loadingTask.promise;
+          setPdfDoc(doc);
+        }).catch(err => {
+          console.error("PDF Load Error:", err);
+          pdfLoadingRef.current = null;
+        });
+      }
+    } else {
+      setPdfDoc(null);
+      pdfLoadingRef.current = null;
+    }
+
     return () => { if (bgCrawlerRef.current) clearTimeout(bgCrawlerRef.current); };
   }, [comic.id, filePath]); // eslint-disable-line
 
   useEffect(() => {
     if (totalPages === 0) return;
-    loadHigh(currentPage);
-    loadHigh(currentPage + 1);
-    loadHigh(currentPage + 2);
-    if (currentPage > 0) loadHigh(currentPage - 1);
-    startCrawler(currentPage, totalPages);
-  }, [currentPage, totalPages]); // eslint-disable-line
+
+    if (pdfDoc) {
+      // Render PDF page
+      renderPdfPage(pdfDoc, currentPage).then(dataUrl => {
+        applyPage(currentPage, dataUrl);
+      });
+    } else {
+      loadHigh(currentPage);
+      loadHigh(currentPage + 1);
+      loadHigh(currentPage + 2);
+      if (currentPage > 0) loadHigh(currentPage - 1);
+      startCrawler(currentPage, totalPages);
+    }
+  }, [currentPage, totalPages, pdfDoc]); // eslint-disable-line
+
+  async function renderPdfPage(doc: any, pageIdx: number): Promise<string> {
+    const page = await doc.getPage(pageIdx + 1);
+    const viewport = page.getViewport({ scale: 2.0 }); // High quality
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    canvas.height = viewport.height;
+    canvas.width = viewport.width;
+
+    await page.render({ canvasContext: context, viewport }).promise;
+    return canvas.toDataURL("image/jpeg", 0.85);
+  }
 
   // ── Panel detection ─────────────────────────────────────────────────────
   const runDetect = useCallback((img: HTMLImageElement, pageIdx: number) => {

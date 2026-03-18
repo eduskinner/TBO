@@ -141,22 +141,29 @@ export default function Library() {
         )
       );
     }
-    
-    // sorting files
-    files.sort((a, b) => {
+    // 3. Clone arrays to ensure React sees the changes and sort files
+    let finalFiles = [...files];
+    let finalFolders = [...folders];
+
+    finalFiles.sort((a, b) => {
       let av: any, bv: any;
-      if (sortField === "title") { av = a.title; bv = b.title; }
-      else if (sortField === "series") { av = a.series || a.title; bv = b.series || b.title; }
-      else if (sortField === "date_added") { av = a.date_added; bv = b.date_added; }
-      else if (sortField === "year") { av = a.year || 0; bv = b.year || 0; }
-      else if (sortField === "read_status") { av = a.read_status; bv = b.read_status; }
-      else { av = a.file_name; bv = b.file_name; }
+      switch (sortField) {
+        case "title":        av = a.title; bv = b.title; break;
+        case "series":       av = a.series || a.title; bv = b.series || b.title; break;
+        case "date_added":   av = a.date_added; bv = b.date_added; break;
+        case "year":         av = a.year ?? 0; bv = b.year ?? 0; break;
+        case "read_status":  av = a.read_status; bv = b.read_status; break;
+        case "issue_number": av = parseInt(a.issue_number) || 0; bv = parseInt(b.issue_number) || 0; break;
+        default:             av = a.file_name; bv = b.file_name; break;
+      }
       
-      const res = String(av).toLowerCase().localeCompare(String(bv).toLowerCase());
+      const res = typeof av === "string" 
+        ? av.toLowerCase().localeCompare(bv.toLowerCase())
+        : (av as number) - (bv as number);
       return sortAsc ? res : -res;
     });
 
-    return { folders, comics: files };
+    return { folders: finalFolders, comics: finalFiles };
   }, [layout, searchQuery, filterStatus, sortField, sortAsc, activeDir]);
 
   const goUp = () => {
