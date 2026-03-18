@@ -14,11 +14,12 @@ import React, {
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { readDir, DirEntry } from "@tauri-apps/plugin-fs";
 import {
   Menu, X, ChevronLeft, Search, RefreshCw, FolderPlus,
   Loader2, FolderOpen, Settings, Library,
   CheckCircle, Clock, ChevronRight, ZoomIn, ZoomOut,
-  ArrowLeft, AlertCircle,
+  ArrowLeft, AlertCircle, Folder, HardDrive,
 } from "lucide-react";
 import { useStore, type ScanProgress } from "../store";
 import { loadCover, placeholderColor, preloadCovers } from "../store/coverQueue";
@@ -118,9 +119,89 @@ function CoverImage({ comic }: { comic: Comic }) {
 // Add Folder Modal (bottom sheet)
 // ─────────────────────────────────────────────────────────────────────────────
 
+function FolderExplorer({ currentPath, onPathChange }: { currentPath: string, onPathChange: (p: string) => void }) {
+  const [entries, setEntries] = useState<DirEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(null);
+    readDir(currentPath)
+      .then(res => {
+        if (active) {
+          setEntries(res.filter(e => e.isDirectory).sort((a, b) => a.name.localeCompare(b.name)));
+          setLoading(false);
+        }
+      })
+      .catch(err => {
+        if (active) {
+          setError(err.toString());
+          setLoading(false);
+        }
+      });
+    return () => { active = false; };
+  }, [currentPath]);
+
+  const goUp = () => {
+    const parts = currentPath.split("/").filter(Boolean);
+    if (parts.length > 0) {
+      // Handle /storage/emulated/0 root specifically
+      if (currentPath === "/storage/emulated/0") {
+        onPathChange("/storage/emulated");
+      } else if (currentPath === "/storage/emulated") {
+        onPathChange("/storage");
+      } else if (currentPath === "/storage") {
+        onPathChange("/");
+      } else {
+        onPathChange("/" + parts.slice(0, -1).join("/"));
+      }
+    }
+  };
+
+  return (
+    <div style={{ background: "var(--bg3)", borderRadius: 12, border: "1px solid var(--border)", overflow: "hidden", marginTop: 12 }}>
+      <div style={{ padding: "8px 12px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 8, background: "var(--bg4)" }}>
+        <button onClick={goUp} style={{ background: "none", border: "none", color: "var(--accent)", padding: 4, display: "flex", alignItems: "center" }}>
+          <ChevronLeft size={18} />
+        </button>
+        <span style={{ fontSize: 11, color: "var(--text2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "'IBM Plex Mono',monospace" }}>
+          {currentPath}
+        </span>
+      </div>
+      <div style={{ maxHeight: 240, overflowY: "auto" }}>
+        {loading && <div style={{ padding: 20, textAlign: "center" }}><Loader2 size={20} className="animate-spin" style={{ margin: "0 auto", color: "var(--accent)" }} /></div>}
+        {error && (
+          <div style={{ padding: 16, textAlign: "center" }}>
+            <p style={{ color: "#f87171", fontSize: 12, marginBottom: 8 }}>Access Denied</p>
+            <p style={{ fontSize: 11, color: "var(--text3)" }}>{error}</p>
+          </div>
+        )}
+        {!loading && !error && entries.length === 0 && <div style={{ padding: 20, textAlign: "center", fontSize: 13, color: "var(--text3)" }}>No folders found</div>}
+        {!loading && !error && entries.map(e => (
+          <button
+            key={e.name}
+            onClick={() => onPathChange(currentPath + (currentPath.endsWith("/") ? "" : "/") + e.name)}
+            style={{
+              width: "100%", padding: "12px 14px", display: "flex", alignItems: "center", gap: 12,
+              background: "none", border: "none", borderBottom: "1px solid var(--border)",
+              color: "var(--text)", textAlign: "left"
+            }}
+          >
+            <Folder size={18} color="var(--accent)" fill="var(--accent)" fillOpacity={0.1} />
+            <span style={{ fontSize: 14 }}>{e.name}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AddFolderModal({ onClose }: { onClose: () => void }) {
   const [path, setPath] = useState("/storage/emulated/0/Download");
   const [permWarn, setPermWarn] = useState(false);
+  const [showExplorer, setShowExplorer] = useState(false);
 
   const handleScan = async () => {
     if (!path.trim()) return;
@@ -146,7 +227,7 @@ function AddFolderModal({ onClose }: { onClose: () => void }) {
       style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "flex-end" }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ width: "100%", background: "var(--bg2)", borderRadius: "20px 20px 0 0", padding: "0 0 24px", boxShadow: "0 -8px 40px rgba(0,0,0,0.6)" }}>
+      <div style={{ width: "100%", background: "var(--bg2)", borderRadius: "20px 20px 0 0", padding: "0 0 24px", boxShadow: "0 -8px 40px rgba(0,0,0,0.6)", maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
         {/* Handle */}
         <div style={{ display: "flex", justifyContent: "center", padding: "12px 0 4px" }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: "var(--border)" }} />
@@ -162,79 +243,103 @@ function AddFolderModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        <div style={{ padding: "16px 20px" }}>
-          {/* Quick paths */}
-          <p style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'IBM Plex Mono',monospace" }}>
-            Common locations
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-            {ANDROID_QUICK_PATHS.map(({ label, path: p }) => (
-              <button key={p} onClick={() => setPath(p)}
+        <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
+          {!showExplorer ? (
+            <>
+              {/* Quick paths */}
+              <p style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 10, fontFamily: "'IBM Plex Mono',monospace" }}>
+                Common locations
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+                {ANDROID_QUICK_PATHS.map(({ label, path: p }) => (
+                  <button key={p} onClick={() => setPath(p)}
+                    style={{
+                      padding: "6px 12px", borderRadius: 20,
+                      background: path === p ? "var(--accent)" : "var(--bg4)",
+                      color: path === p ? "#0C0C0E" : "var(--text2)",
+                      border: "1px solid " + (path === p ? "var(--accent)" : "var(--border)"),
+                      fontSize: 12, fontWeight: 500,
+                    }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Manual path input */}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <p style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, fontFamily: "'IBM Plex Mono',monospace" }}>
+                  Current Path
+                </p>
+                <button
+                  onClick={() => setShowExplorer(true)}
+                  style={{ background: "none", border: "none", color: "var(--accent)", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", gap: 4 }}
+                >
+                  <FolderOpen size={14} /> Browse...
+                </button>
+              </div>
+              <input
+                value={path}
+                onChange={e => setPath(e.target.value)}
+                placeholder="/storage/emulated/0/Comics"
                 style={{
-                  padding: "6px 12px", borderRadius: 20,
-                  background: path === p ? "var(--accent)" : "var(--bg4)",
-                  color: path === p ? "#0C0C0E" : "var(--text2)",
-                  border: "1px solid " + (path === p ? "var(--accent)" : "var(--border)"),
-                  fontSize: 12, fontWeight: 500,
-                }}>
-                {label}
+                  width: "100%", padding: "12px 14px",
+                  background: "var(--bg3)", border: "1px solid var(--border)",
+                  borderRadius: 10, color: "var(--text)", fontSize: 13,
+                  fontFamily: "'IBM Plex Mono',monospace", outline: "none",
+                }}
+              />
+              <p style={{ fontSize: 11, color: "var(--text3)", marginTop: 8 }}>
+                Tip: Comics should be CBZ or CBR files. Internal storage on most Android phones is at /storage/emulated/0
+              </p>
+            </>
+          ) : (
+            <>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <p style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, fontFamily: "'IBM Plex Mono',monospace" }}>
+                  Select Folder
+                </p>
+                <button
+                  onClick={() => setShowExplorer(false)}
+                  style={{ background: "none", border: "none", color: "var(--accent)", fontSize: 12, fontWeight: 600 }}
+                >
+                  Back to Manual
+                </button>
+              </div>
+              <FolderExplorer currentPath={path} onPathChange={setPath} />
+            </>
+          )}
+
+          {/* Permission warning — shown after a scan returns 0 results on external storage */}
+          {permWarn && (
+            <div style={{ marginTop: 16, padding: "14px 16px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 12 }}>
+              <p style={{ fontSize: 13, color: "#f87171", fontWeight: 700, marginBottom: 6 }}>
+                ⚠ Storage permission required
+              </p>
+              <p style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5, marginBottom: 12 }}>
+                Access was denied. This usually means the app hasn&apos;t been granted
+                storage access. Please follow these steps:
+              </p>
+              <ol style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.8, paddingLeft: 18, marginBottom: 12 }}>
+                <li>Open <strong style={{ color: "var(--text)" }}>Android Settings</strong></li>
+                <li>Go to <strong style={{ color: "var(--text)" }}>Apps → Lector TBO</strong></li>
+                <li>Tap <strong style={{ color: "var(--text)" }}>Permissions → Files and media</strong></li>
+                <li>Select <strong style={{ color: "var(--text)" }}>Allow management of all files</strong></li>
+                <li>Return here and tap <strong style={{ color: "var(--text)" }}>Scan This Folder</strong> again</li>
+              </ol>
+              <button
+                onClick={handleGrant}
+                style={{
+                  marginTop: 14, width: "100%", padding: "10px",
+                  background: "rgba(255,255,255,0.1)", color: "var(--text)",
+                  border: "1px solid var(--border)", borderRadius: 8,
+                  fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+                }}
+              >
+                <Settings size={14} /> Open Permission Settings
               </button>
-            ))}
-          </div>
-
-          {/* Manual path input */}
-          <p style={{ fontSize: 11, color: "var(--text3)", textTransform: "uppercase", letterSpacing: 1, marginBottom: 8, fontFamily: "'IBM Plex Mono',monospace" }}>
-            Or type a path
-          </p>
-          <input
-            value={path}
-            onChange={e => setPath(e.target.value)}
-            placeholder="/storage/emulated/0/Comics"
-            style={{
-              width: "100%", padding: "12px 14px",
-              background: "var(--bg3)", border: "1px solid var(--border)",
-              borderRadius: 10, color: "var(--text)", fontSize: 13,
-              fontFamily: "'IBM Plex Mono',monospace", outline: "none",
-            }}
-          />
-          <p style={{ fontSize: 11, color: "var(--text3)", marginTop: 8 }}>
-            Tip: Comics should be CBZ or CBR files. Internal storage on most Android phones is at /storage/emulated/0
-          </p>
+            </div>
+          )}
         </div>
-
-        {/* Permission warning — shown after a scan returns 0 results on external storage */}
-        {permWarn && (
-          <div style={{ margin: "0 20px 16px", padding: "14px 16px", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 12 }}>
-            <p style={{ fontSize: 13, color: "#f87171", fontWeight: 700, marginBottom: 6 }}>
-              ⚠ Storage permission required
-            </p>
-            <p style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.5, marginBottom: 12 }}>
-              No files were found. This usually means the app hasn&apos;t been granted
-              storage access. Please follow these steps:
-            </p>
-            <ol style={{ fontSize: 12, color: "var(--text2)", lineHeight: 1.8, paddingLeft: 18, marginBottom: 12 }}>
-              <li>Open <strong style={{ color: "var(--text)" }}>Android Settings</strong></li>
-              <li>Go to <strong style={{ color: "var(--text)" }}>Apps → Lector TBO</strong></li>
-              <li>Tap <strong style={{ color: "var(--text)" }}>Permissions → Files and media</strong></li>
-              <li>Select <strong style={{ color: "var(--text)" }}>Allow management of all files</strong></li>
-              <li>Return here and tap <strong style={{ color: "var(--text)" }}>Scan This Folder</strong> again</li>
-            </ol>
-            <p style={{ fontSize: 11, color: "var(--text3)" }}>
-              On some phones this is under Special App Access → All Files Access
-            </p>
-            <button
-              onClick={handleGrant}
-              style={{
-                marginTop: 14, width: "100%", padding: "10px",
-                background: "rgba(255,255,255,0.1)", color: "var(--text)",
-                border: "1px solid var(--border)", borderRadius: 8,
-                fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8
-              }}
-            >
-              <Settings size={14} /> Open Permission Settings
-            </button>
-          </div>
-        )}
 
         <div style={{ padding: "0 20px" }}>
           <button

@@ -36,22 +36,8 @@ jobs:
             npx tauri android init --ci
           fi
 
-      - name: install AndroidManifest with storage permissions
-        run: |
-          python3 -c '
-          path = "src-tauri/gen/android/app/src/main/AndroidManifest.xml"
-          with open(path, "r") as f: content = f.read()
-          perms = """
-              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
-              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-              <uses-permission android:name="android.permission.WAKE_LOCK" />
-          """
-          with open(path, "w") as f: f.write(content.replace("<application", perms + "\n    <application"))
-          '
-
       - name: build android apk
-        run: npm run tauri android build -- --apk --target aarch64 --debug
+        run: npm run tauri android build -- --apk --target aarch64
       - uses: actions/upload-artifact@v4
         with:
           name: Lector-TBO-Android
