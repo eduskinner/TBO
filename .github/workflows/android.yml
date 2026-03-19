@@ -30,11 +30,12 @@ jobs:
           echo "NDK_HOME=$ANDROID_HOME/ndk/27.2.12479018" >> $GITHUB_ENV
       - name: install frontend dependencies
         run: npm install
-      - name: initialize android project
+      - name: initialize and patch android project
         run: |
-          if [ ! -d "src-tauri/gen/android" ]; then
-            npx tauri android init --ci
-          fi
+          rm -rf src-tauri/gen/android
+          npx tauri android init
+          cp src-tauri/android-custom/AndroidManifest.xml src-tauri/gen/android/app/src/main/AndroidManifest.xml
+          cp src-tauri/android-custom/build.gradle.kts src-tauri/gen/android/app/build.gradle.kts
 
       - name: build android apk
         run: npm run tauri android build -- --apk --target aarch64 --debug
