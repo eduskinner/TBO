@@ -23,6 +23,10 @@
     ],
     "security": {
       "csp": null
+    },
+    "android": {
+      "minSdkVersion": 24,
+      "targetSdkVersion": 34
     }
   },
   "bundle": {
