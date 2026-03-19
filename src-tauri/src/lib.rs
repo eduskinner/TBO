@@ -293,6 +293,7 @@ fn is_zip_magic(path: &Path) -> bool {
     false
 }
 
+#[cfg(not(target_os = "android"))]
 fn is_rar_magic(path: &Path) -> bool {
     if let Ok(mut f) = fs::File::open(path) {
         use std::io::Read;
@@ -348,6 +349,7 @@ fn unrar_crate_extract_page(path: &Path, files: &[String], idx: usize) -> Result
     Err(format!("File not found in RAR: {}", target_name))
 }
 
+#[cfg(not(target_os = "android"))]
 fn rar_run(cmds: &[(&str, &[&str])]) -> Result<std::process::Output, String> {
     let mut last_err = "No RAR tool available".to_string();
     for (bin, args) in cmds {
@@ -366,6 +368,7 @@ fn rar_run(cmds: &[(&str, &[&str])]) -> Result<std::process::Output, String> {
     Err(last_err)
 }
 
+#[cfg(not(target_os = "android"))]
 fn rar_tool_image_list(path: &Path) -> Result<Vec<String>, String> {
     let p = path.to_str().unwrap_or("");
     let out = rar_run(&[
@@ -393,6 +396,7 @@ fn rar_tool_image_list(path: &Path) -> Result<Vec<String>, String> {
     Ok(names)
 }
 
+#[cfg(not(target_os = "android"))]
 fn rar_tool_extract_page(path: &Path, files: &[String], idx: usize) -> Result<Vec<u8>, String> {
     if idx >= files.len() { return Err(format!("Page {} out of range", idx)); }
     let p = path.to_str().unwrap_or("");
